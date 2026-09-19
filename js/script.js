@@ -308,6 +308,26 @@
   refreshNutrientUI();
   updateDoseScreen();
 
+  // ============================================================
+  // LETTUCE BIOMASS MODEL INPUTS (Van Henten) - co2 / density / harvest target
+  // ============================================================
+  const co2Slider = document.getElementById('co2-slider');
+  const co2ValEl = document.getElementById('co2-val');
+  const densitySlider = document.getElementById('density-slider');
+  const densityValEl = document.getElementById('density-val');
+  const harvestTargetSlider = document.getElementById('harvest-target-slider');
+  const harvestTargetValEl = document.getElementById('harvest-target-val');
+
+  co2Slider.addEventListener('input', (e)=>{
+    co2ValEl.textContent = e.target.value + ' ppm';
+  });
+  densitySlider.addEventListener('input', (e)=>{
+    densityValEl.textContent = e.target.value + ' plants/m²';
+  });
+  harvestTargetSlider.addEventListener('input', (e)=>{
+    harvestTargetValEl.textContent = e.target.value + ' g/head';
+  });
+
   const nutrientPopup = document.getElementById('nutrient-popup');
   const nutrientBackdrop = document.getElementById('nutrient-backdrop');
   function openNutrientPopup(){
@@ -367,7 +387,7 @@
       rackGroup.add(hole);
       holeMeshes.push(hole);
 
-      holeState.push({ cocopeat:null, plant:null, worldPos:new THREE.Vector3(cx, topY, cz) });
+      holeState.push({ cocopeat:null, plant:null, roots:null, species:null, worldPos:new THREE.Vector3(cx, topY, cz) });
     }
   }
 
@@ -988,18 +1008,59 @@
     m.castShadow = true;
     return m;
   }
+  // ============================================================
+  // ROOT SYSTEM — hangs down from the crown into the NFT channel's water
+  // film, growing in sync with the same maturity curve that drives the
+  // canopy above (see applyTrajectoryPointToPlant / applyTomatoPoint), so
+  // roots and canopy always reach "fully grown" together at harvest.
+  // ============================================================
+  const ROOT_STRAND_COUNT = 12;
+  const ROOT_MAX_LEN = 0.26; // channel interior is ~0.30 deep - leaves clearance above the floor
+  const rootStrandGeo = new THREE.CylinderGeometry(0.006, 0.0015, 1, 5);
+  rootStrandGeo.translate(0, -0.5, 0); // spans local y=0 (crown) to y=-1 (tip) so scale.y == length
+  const rootMat = new THREE.MeshStandardMaterial({color:0xe7dcc2, roughness:0.88});
+  function makeRoots(){
+    const g = new THREE.Group();
+    const strands = [];
+    for(let i=0;i<ROOT_STRAND_COUNT;i++){
+      const strand = new THREE.Mesh(rootStrandGeo, rootMat);
+      const ang = (i/ROOT_STRAND_COUNT)*Math.PI*2 + Math.random()*0.5;
+      const spread = 0.015 + Math.random()*0.02;
+      strand.position.set(Math.cos(ang)*spread, 0, Math.sin(ang)*spread);
+      strand.rotation.z = (Math.random()-0.5)*0.4;
+      strand.rotation.x = (Math.random()-0.5)*0.4;
+      strand.userData.lenJitter = 0.7 + Math.random()*0.55;
+      strand.scale.y = 0.0001;
+      g.add(strand);
+      strands.push(strand);
+    }
+    g.userData.strands = strands;
+    g.visible = false;
+    return g;
+  }
+  function updateRootGrowth(roots, maturity){
+    const frac = Math.max(0, Math.min(1, maturity));
+    roots.visible = frac > 0.04;
+    if(!roots.visible) return;
+    roots.userData.strands.forEach(s=>{
+      s.scale.y = Math.max(0.0001, ROOT_MAX_LEN * frac * s.userData.lenJitter);
+    });
+  }
+
   const leafGeo = new THREE.SphereGeometry(0.16, 10, 8);
   function makeLettuce(){
     const g = new THREE.Group();
     const outerGreens = [0x2f5f18, 0x3d7620, 0x468426, 0x356b1c];
     const innerGreens = [0x5cae2c, 0x6bc432, 0x5aab2a];
+    const outerLeaves = [], innerLeaves = [];
 
-    function addLeafRing(count, radius, heightBase, scaleXYZ, colors, tiltX){
+    function addLeafRing(count, radius, heightBase, scaleXYZ, colors, tiltX, bucket){
       for(let i=0;i<count;i++){
         const mat = new THREE.MeshPhysicalMaterial({
           color: colors[i % colors.length],
           roughness: 0.5, clearcoat: 0.25, clearcoatRoughness: 0.4
         });
+        mat.userData.baseColor = mat.color.clone();
         const leaf = new THREE.Mesh(leafGeo, mat);
         const ang = (i / count) * Math.PI * 2 + (i % 2) * 0.18;
         const jitter = 0.85 + Math.random()*0.3;
@@ -1009,23 +1070,405 @@
         leaf.rotation.x = tiltX;
         leaf.castShadow = true;
         g.add(leaf);
+        bucket.push(leaf);
       }
     }
 
     // outer, darker, larger curled-back leaves
-    addLeafRing(8, 0.115, 0.07, [0.95, 0.5, 1.25], outerGreens, -0.55);
+    addLeafRing(8, 0.115, 0.07, [0.95, 0.5, 1.25], outerGreens, -0.55, outerLeaves);
     // inner, brighter, upright younger leaves
-    addLeafRing(6, 0.06, 0.1, [0.6, 0.65, 0.8], innerGreens, -0.15);
+    addLeafRing(6, 0.06, 0.1, [0.6, 0.65, 0.8], innerGreens, -0.15, innerLeaves);
 
-    const core = new THREE.Mesh(
-      new THREE.SphereGeometry(0.075,10,8),
-      new THREE.MeshPhysicalMaterial({color:0xbfe888, roughness:0.45, clearcoat:0.3})
-    );
+    const coreMat = new THREE.MeshPhysicalMaterial({color:0xbfe888, roughness:0.45, clearcoat:0.3});
+    coreMat.userData.baseColor = coreMat.color.clone();
+    const core = new THREE.Mesh(new THREE.SphereGeometry(0.075,10,8), coreMat);
     core.position.y = 0.1;
     core.scale.y = 0.85;
     g.add(core);
-    g.scale.setScalar(0.55);
+
+    // grows from a seedling up to full size as the backend-predicted
+    // trajectory plays back (see LETTUCE GROWTH ENGINE below) - simDays
+    // accumulates frame-by-frame at the current playback speed, so changing
+    // speed mid-run never causes a visual jump
+    g.userData.simDays = 0;
+    g.userData.harvestNotified = false;
+    g.userData.outerLeaves = outerLeaves;
+    g.userData.innerLeaves = innerLeaves;
+    g.userData.core = core;
+    g.userData.cropType = 'vegetative';
+    g.scale.setScalar(SEEDLING_SCALE);
     return g;
+  }
+
+  const SPECIES_LABELS = { lettuce:'Lettuce', tomato:'Tomato', spinach:'Spinach' };
+
+  // shared leaf-ring builder used by makeSpinach/makeTomato below (makeLettuce
+  // keeps its own inline copy above, untouched, since it's already tuned)
+  function buildLeafRing(count, radius, heightBase, scaleXYZ, colors, tiltX){
+    const leaves = [];
+    for(let i=0;i<count;i++){
+      const mat = new THREE.MeshPhysicalMaterial({
+        color: colors[i % colors.length],
+        roughness: 0.5, clearcoat: 0.25, clearcoatRoughness: 0.4
+      });
+      mat.userData.baseColor = mat.color.clone();
+      const leaf = new THREE.Mesh(leafGeo, mat);
+      const ang = (i / count) * Math.PI * 2 + (i % 2) * 0.18;
+      const jitter = 0.85 + Math.random()*0.3;
+      leaf.position.set(Math.cos(ang)*radius, heightBase + (i%2)*0.025, Math.sin(ang)*radius);
+      leaf.scale.set(scaleXYZ[0]*jitter, scaleXYZ[1], scaleXYZ[2]*jitter);
+      leaf.rotation.y = ang;
+      leaf.rotation.x = tiltX;
+      leaf.castShadow = true;
+      leaves.push(leaf);
+    }
+    return leaves;
+  }
+
+  // spinach: same rosette body plan as lettuce (reuses its whole growth
+  // animation path unchanged - outerLeaves/innerLeaves/core contract), but
+  // narrower, flatter, darker-green leaves to read as a visually distinct
+  // low-growing crop rather than a recolored lettuce.
+  function makeSpinach(){
+    const g = new THREE.Group();
+    const outerGreens = [0x1f4d1f, 0x2a5f2a, 0x224f22, 0x1a4419];
+    const innerGreens = [0x3f7a3a, 0x4a8f46, 0x357535];
+
+    const outerLeaves = buildLeafRing(7, 0.135, 0.05, [0.7, 0.3, 1.55], outerGreens, -0.22);
+    outerLeaves.forEach(l=> g.add(l));
+    const innerLeaves = buildLeafRing(5, 0.065, 0.075, [0.5, 0.55, 0.95], innerGreens, -0.05);
+    innerLeaves.forEach(l=> g.add(l));
+
+    const coreMat = new THREE.MeshPhysicalMaterial({color:0x6fae52, roughness:0.4, clearcoat:0.3});
+    coreMat.userData.baseColor = coreMat.color.clone();
+    const core = new THREE.Mesh(new THREE.SphereGeometry(0.06,10,8), coreMat);
+    core.position.y = 0.08;
+    core.scale.y = 0.75;
+    g.add(core);
+
+    g.userData.simDays = 0;
+    g.userData.harvestNotified = false;
+    g.userData.outerLeaves = outerLeaves;
+    g.userData.innerLeaves = innerLeaves;
+    g.userData.core = core;
+    g.userData.cropType = 'vegetative';
+    g.scale.setScalar(SEEDLING_SCALE);
+    return g;
+  }
+
+  // tomato: a fruiting crop, structurally different from the leafy rosettes -
+  // a stem with leaf tiers that reveal progressively up its height, plus
+  // fruit that appear/swell/ripen (green -> red) as the backend's per-day
+  // fruitCount/fruitWeightG climb (see applyTomatoPoint).
+  function makeTomato(){
+    const g = new THREE.Group();
+
+    const stemMat = new THREE.MeshStandardMaterial({color:0x3c6b28, roughness:0.7});
+    stemMat.userData.baseColor = stemMat.color.clone();
+    const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.026, 0.04, 1.0, 8), stemMat);
+    stem.position.y = 0.5;
+    stem.castShadow = true;
+    g.add(stem);
+
+    const leafGreens = [0x2f6b1f, 0x3d7f28, 0x356f22];
+    const tierHeights = [0.26, 0.52, 0.8];
+    const leafTiers = tierHeights.map(h=>{
+      const leaves = buildLeafRing(5, 0.05, h, [0.5, 0.22, 0.85], leafGreens, -0.4);
+      leaves.forEach(l=> g.add(l));
+      return leaves;
+    });
+
+    const fruitGeo = new THREE.SphereGeometry(0.045, 8, 7);
+    const fruitPositions = [
+      [0.06,0.48,0.02],[0.08,0.44,-0.03],[0.03,0.42,0.05],
+      [-0.06,0.66,0.03],[-0.08,0.62,-0.02],[-0.03,0.6,0.05],
+    ];
+    const fruits = fruitPositions.map(pos=>{
+      const mat = new THREE.MeshPhysicalMaterial({color:0x4a7a3a, roughness:0.35, clearcoat:0.4});
+      mat.userData.unripe = new THREE.Color(0x4a7a3a);
+      mat.userData.ripe = new THREE.Color(0xc23b22);
+      const f = new THREE.Mesh(fruitGeo, mat);
+      f.position.set(pos[0], pos[1], pos[2]);
+      f.visible = false;
+      f.castShadow = true;
+      g.add(f);
+      return f;
+    });
+
+    g.userData.simDays = 0;
+    g.userData.harvestNotified = false;
+    g.userData.leafTiers = leafTiers;
+    g.userData.fruits = fruits;
+    g.userData.cropType = 'fruiting';
+    g.scale.setScalar(SEEDLING_SCALE);
+    return g;
+  }
+
+  // ============================================================
+  // LETTUCE GROWTH ENGINE — calls the Python backend (backend/app.py) for
+  // a real prediction, then plays back the returned day-by-day trajectory
+  // ============================================================
+  const GROWTH_ENGINE_URL = 'http://localhost:8000/simulate';
+  const SEEDLING_SCALE = 0.09, FULL_SCALE = 0.55;
+  const PLAYBACK_SECONDS_PER_DAY = 2.5; // how fast the predicted trajectory plays out visually
+  const STRESS_TINT_OUTER = 0.7, STRESS_TINT_INNER = 0.35, STRESS_TINT_CORE = 0.25;
+  const SYMPTOM_TINT_BOOST = 0.6;
+  const GENERIC_STRESS_COLOR = new THREE.Color(0xcbbf6a);
+  const _symptomColor = new THREE.Color();
+
+  let simRunning = false;
+  let latestTrajectories = {};   // species -> trajectory[]
+  let latestMechanistics = {};   // species -> mechanistic result
+  let playbackSpeed = 1;
+  let simDaysGlobal = 0;
+  let lastGrowthFrameTime = null; // independent, uncapped wall-clock delta for growth accumulation - see updatePlantsGrowth
+  const runSimBtn = document.getElementById('run-sim-btn');
+  const simStatusEl = document.getElementById('sim-status');
+  const simDayReadoutEl = document.getElementById('sim-day-readout');
+  const simDayValueEl = document.getElementById('sim-day-value');
+
+  document.querySelectorAll('.speed-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      playbackSpeed = parseFloat(btn.dataset.speed);
+      document.querySelectorAll('.speed-btn').forEach(b=> b.classList.toggle('active', b === btn));
+    });
+  });
+  const harvestReportEl = document.getElementById('harvest-report');
+
+  function plantedSpeciesList(){
+    return [...new Set(holeState.filter(s=>s.plant).map(s=>s.species))];
+  }
+
+  function renderHarvestReport(mechanisticsBySpecies, speciesList){
+    harvestReportEl.hidden = false;
+    harvestReportEl.innerHTML = speciesList.map(species=>{
+      const m = mechanisticsBySpecies[species];
+      const fq = m.finalQuality;
+      const headline = m.willReachHarvest
+        ? '<span class="ok">✓ Harvest in ' + m.daysToHarvest + ' simulated days</span>'
+        : '<span class="fail">✕ Will not reach harvest</span>' + (m.limitingFactors.length ? '<br>' + m.limitingFactors.join(', ') : '');
+      const rows = m.cropType === 'fruiting'
+        ? [['Fruit', fq.fruitCount], ['Avg fruit wt', fq.fruitWeightG + ' g'], ['Total yield', fq.totalYieldG + ' g'],
+           ['Canopy', fq.canopyCm + ' cm'], ['Grade', fq.grade]]
+        : [['Leaves', fq.leafCount], ['Biomass', fq.biomassG + ' g'], ['Canopy', fq.canopyCm + ' cm'], ['Grade', fq.grade]];
+      const rowsHtml = rows.map(([k,v])=> '<div><span class="k">'+k+'</span><span class="v">'+v+'</span></div>').join('');
+
+      let vanHentenHtml = '';
+      if(m.vanHenten){
+        const vh = m.vanHenten;
+        const vhHeadline = vh.willReachHarvest
+          ? '<span class="ok">✓ Target fresh weight in ' + vh.daysToHarvest + ' days</span>'
+          : '<span class="fail">✕ Won\'t hit target fresh weight in the simulated window</span>';
+        const vhRows = [
+          ['Structural DM (SDM)', vh.finalSdmGm2 + ' g/m²'],
+          ['Non-structural DM (NSDM)', vh.finalNsdmGm2 + ' g/m²'],
+          ['Leaf biomass', vh.finalLeafBiomassG + ' g/plant'],
+          ['Root biomass', vh.finalRootBiomassG + ' g/plant'],
+          ['Total dry biomass', vh.finalTotalBiomassG + ' g/plant'],
+          ['Fresh weight', vh.finalFreshWeightG + ' g/plant'],
+        ];
+        const vhRowsHtml = vhRows.map(([k,v])=> '<div><span class="k">'+k+'</span><span class="v">'+v+'</span></div>').join('');
+        vanHentenHtml =
+          '<div class="report-row report-headline" style="margin-top:8px">Van Henten biomass model</div>' +
+          '<div class="report-row">' + vhHeadline + '</div>' +
+          '<div class="report-grid">' + vhRowsHtml + '</div>';
+      }
+
+      return '<div class="report-card">' +
+        '<div class="report-species">' + (SPECIES_LABELS[species]||species) + '</div>' +
+        '<div class="report-row report-headline">' + headline + '</div>' +
+        '<div class="report-grid">' + rowsHtml + '</div>' +
+        '<div class="report-symptoms">' + m.symptoms.join(' · ') + '</div>' +
+        vanHentenHtml +
+      '</div>';
+    }).join('');
+  }
+
+  runSimBtn.addEventListener('click', async ()=>{
+    if(simRunning){
+      simRunning = false;
+      lastGrowthFrameTime = null;
+      runSimBtn.textContent = '▶ Run Simulation';
+      runSimBtn.classList.remove('running');
+      simStatusEl.textContent = 'Paused — growth is frozen until you hit Run';
+      simStatusEl.classList.remove('live');
+      showToast('Simulation paused');
+      return;
+    }
+
+    const speciesList = plantedSpeciesList();
+    if(speciesList.length === 0){
+      showToast('Plant something first', true);
+      return;
+    }
+
+    runSimBtn.disabled = true;
+    runSimBtn.textContent = '… Predicting';
+    simStatusEl.textContent = 'Contacting the growth engine…';
+    simStatusEl.classList.remove('error','live');
+
+    const waterAvailable = flowActive();
+    const baseBody = {
+      ppfd: parseInt(lightSlider.value,10),
+      temp: chemTargets.temp,
+      ph: chemTargets.pH,
+      nutrients: {N:nutrients.N, P:nutrients.P, K:nutrients.K, Ca:nutrients.Ca, Mg:nutrients.Mg},
+      waterAvailable,
+      co2: parseInt(co2Slider.value, 10),
+      plantDensity: parseInt(densitySlider.value, 10),
+      harvestTargetG: parseInt(harvestTargetSlider.value, 10),
+    };
+
+    try{
+      // every distinct planted species shares the same grow-bed conditions
+      // (one light, one nutrient dose) but gets its own species-specific
+      // prediction, so we fire one request per species actually in the rack
+      const results = await Promise.all(speciesList.map(species=>
+        fetch(GROWTH_ENGINE_URL, {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({...baseBody, species})
+        }).then(res=>{
+          if(!res.ok) throw new Error('backend returned ' + res.status);
+          return res.json();
+        })
+      ));
+
+      latestTrajectories = {}; latestMechanistics = {};
+      speciesList.forEach((species, i)=>{
+        latestTrajectories[species] = results[i].mechanistic.trajectory;
+        latestMechanistics[species] = results[i].mechanistic;
+      });
+
+      // a fresh run: every currently-planted crop restarts its own playback
+      // clock now, growing along its own species' predicted trajectory
+      holeState.forEach(state=>{
+        if(!state.plant) return;
+        state.plant.userData.simDays = 0;
+        state.plant.userData.harvestNotified = false;
+      });
+      simDaysGlobal = 0;
+      lastGrowthFrameTime = null;
+      simDayReadoutEl.hidden = false;
+      simDayValueEl.textContent = '0';
+
+      simRunning = true;
+      runSimBtn.disabled = false;
+      runSimBtn.textContent = '⏸ Pause Simulation';
+      runSimBtn.classList.add('running');
+      simStatusEl.textContent = 'Running — growth is live';
+      simStatusEl.classList.add('live');
+      renderHarvestReport(latestMechanistics, speciesList);
+      showToast(waterAvailable ? 'Simulation running' : 'Simulation running — but no water is flowing, growth stays paused');
+    } catch(err){
+      runSimBtn.disabled = false;
+      runSimBtn.textContent = '▶ Run Simulation';
+      simStatusEl.textContent = 'Could not reach the growth engine — start the backend (see backend/README.md)';
+      simStatusEl.classList.add('error');
+      showToast('Could not reach the growth engine at localhost:8000', true);
+    }
+  });
+
+  function sampleTrajectory(trajectory, days){
+    const maxDay = trajectory.length - 1;
+    const clamped = Math.max(0, Math.min(maxDay, days));
+    const i0 = Math.floor(clamped), i1 = Math.min(maxDay, i0+1);
+    const t = clamped - i0;
+    const a = trajectory[i0], b = trajectory[i1];
+    function lerp(key){
+      const av = a[key], bv = b[key];
+      if(av == null || bv == null) return av != null ? av : bv;
+      return av + (bv-av)*t;
+    }
+    return { maturity: lerp('maturity'), leafCount: lerp('leafCount'), fruitCount: lerp('fruitCount'), fruitWeightG: lerp('fruitWeightG') };
+  }
+
+  function applyTrajectoryPointToPlant(plant, point, outerSymptom, innerSymptom, stress){
+    const s = point.maturity;
+    plant.scale.setScalar(SEEDLING_SCALE + (FULL_SCALE - SEEDLING_SCALE) * s);
+    plant.userData.outerLeaves.forEach(l=> l.visible = s > 0.15);
+    plant.userData.innerLeaves.forEach(l=> l.visible = s > 0.04);
+
+    plant.userData.outerLeaves.forEach(mesh=>{
+      mesh.material.color.copy(mesh.material.userData.baseColor).lerp(GENERIC_STRESS_COLOR, stress*STRESS_TINT_OUTER);
+      if(outerSymptom){ _symptomColor.setHex(outerSymptom.hex); mesh.material.color.lerp(_symptomColor, outerSymptom.severity*SYMPTOM_TINT_BOOST); }
+    });
+    plant.userData.innerLeaves.forEach(mesh=>{
+      mesh.material.color.copy(mesh.material.userData.baseColor).lerp(GENERIC_STRESS_COLOR, stress*STRESS_TINT_INNER);
+      if(innerSymptom){ _symptomColor.setHex(innerSymptom.hex); mesh.material.color.lerp(_symptomColor, innerSymptom.severity*SYMPTOM_TINT_BOOST*0.8); }
+    });
+    const core = plant.userData.core;
+    core.material.color.copy(core.material.userData.baseColor).lerp(GENERIC_STRESS_COLOR, stress*STRESS_TINT_CORE);
+    if(innerSymptom){ _symptomColor.setHex(innerSymptom.hex); core.material.color.lerp(_symptomColor, innerSymptom.severity*SYMPTOM_TINT_BOOST*0.4); }
+  }
+
+  const LEAF_TIER_THRESHOLDS = [0.06, 0.3, 0.55];
+  function applyTomatoPoint(plant, point, finalPoint, outerSymptom, fruitSymptom, stress){
+    const s = point.maturity;
+    plant.scale.setScalar(SEEDLING_SCALE + (FULL_SCALE - SEEDLING_SCALE) * s);
+
+    plant.userData.leafTiers.forEach((leaves, i)=>{
+      const visible = s > LEAF_TIER_THRESHOLDS[i];
+      leaves.forEach(mesh=>{
+        mesh.visible = visible;
+        mesh.material.color.copy(mesh.material.userData.baseColor).lerp(GENERIC_STRESS_COLOR, stress*STRESS_TINT_OUTER);
+        if(outerSymptom){ _symptomColor.setHex(outerSymptom.hex); mesh.material.color.lerp(_symptomColor, outerSymptom.severity*SYMPTOM_TINT_BOOST); }
+      });
+    });
+
+    const finalCount = finalPoint.fruitCount || 0;
+    const finalWeight = finalPoint.fruitWeightG || 0;
+    const countFrac = finalCount > 0 ? (point.fruitCount||0) / finalCount : 0;
+    const weightFrac = finalWeight > 0 ? (point.fruitWeightG||0) / finalWeight : 0;
+    const visibleFruitCount = Math.round(countFrac * plant.userData.fruits.length);
+
+    plant.userData.fruits.forEach((f, i)=>{
+      f.visible = i < visibleFruitCount;
+      if(!f.visible) return;
+      f.scale.setScalar(0.3 + 0.7*weightFrac);
+      const mat = f.material;
+      mat.color.copy(mat.userData.unripe).lerp(mat.userData.ripe, weightFrac);
+      if(fruitSymptom){ _symptomColor.setHex(fruitSymptom.hex); mat.color.lerp(_symptomColor, fruitSymptom.severity*SYMPTOM_TINT_BOOST); }
+    });
+  }
+
+  function updatePlantsGrowth(){
+    if(!simRunning) return;
+    // deliberately independent of the render loop's own (capped) dt: that
+    // cap exists to stop other systems (flow particles) jumping after a
+    // slow frame, but it would silently eat elapsed time here on any frame
+    // slower than 50ms, undercounting simulated days on a loaded machine or
+    // a throttled/backgrounded tab. Growth should reflect real elapsed time
+    // exactly, so it tracks its own uncapped wall-clock delta.
+    const nowMs = performance.now();
+    if(lastGrowthFrameTime == null) lastGrowthFrameTime = nowMs;
+    const rawDt = (nowMs - lastGrowthFrameTime) / 1000;
+    lastGrowthFrameTime = nowMs;
+    const dayStep = (rawDt / PLAYBACK_SECONDS_PER_DAY) * playbackSpeed;
+
+    simDaysGlobal += dayStep;
+    simDayValueEl.textContent = Math.floor(simDaysGlobal);
+    holeState.forEach(state=>{
+      const plant = state.plant;
+      if(!plant) return;
+      const trajectory = latestTrajectories[state.species];
+      const mech = latestMechanistics[state.species];
+      if(!trajectory || !mech) return;
+      plant.userData.simDays += dayStep;
+      const point = sampleTrajectory(trajectory, plant.userData.simDays);
+
+      if(plant.userData.cropType === 'fruiting'){
+        const finalPoint = trajectory[trajectory.length-1];
+        applyTomatoPoint(plant, point, finalPoint, mech.outerSymptom, mech.secondarySymptom, mech.stress);
+      } else {
+        applyTrajectoryPointToPlant(plant, point, mech.outerSymptom, mech.secondarySymptom, mech.stress);
+      }
+      if(state.roots) updateRootGrowth(state.roots, point.maturity);
+
+      if(!plant.userData.harvestNotified && point.maturity >= 0.95){
+        plant.userData.harvestNotified = true;
+        showToast((SPECIES_LABELS[state.species]||'Plant') + ' ready to harvest');
+      }
+    });
   }
 
 
@@ -1341,8 +1784,11 @@
     const state = holeState[idx];
     if(state.plant){
       rackGroup.remove(state.plant);
+      if(state.roots) rackGroup.remove(state.roots);
+      showToast('Removed ' + (SPECIES_LABELS[state.species] || 'plant'));
       state.plant = null;
-      showToast('Removed lettuce');
+      state.roots = null;
+      state.species = null;
       updateStats();
     } else if(state.cocopeat){
       rackGroup.remove(state.cocopeat);
@@ -1380,14 +1826,21 @@
       rackGroup.add(m);
       state.cocopeat = m;
       showToast('Cocopeat plug placed');
-    } else if(type === 'lettuce'){
+    } else if(type === 'lettuce' || type === 'tomato' || type === 'spinach'){
       if(!state.cocopeat){ showToast('Place cocopeat here first', true); return; }
       if(state.plant){ showToast('Already planted', true); return; }
-      const g = makeLettuce();
+      const g = type === 'lettuce' ? makeLettuce() : type === 'tomato' ? makeTomato() : makeSpinach();
       g.position.copy(state.worldPos).add(new THREE.Vector3(0, 0.13, 0));
       rackGroup.add(g);
       state.plant = g;
-      showToast('Lettuce seedling planted');
+      state.species = type;
+
+      const roots = makeRoots();
+      roots.position.copy(state.worldPos);
+      rackGroup.add(roots);
+      state.roots = roots;
+
+      showToast(SPECIES_LABELS[type] + ' seedling planted');
     }
     updateStats();
   });
@@ -1434,8 +1887,9 @@
   document.getElementById('reset-btn').addEventListener('click', ()=>{
     holeState.forEach(s=>{
       if(s.plant) rackGroup.remove(s.plant);
+      if(s.roots) rackGroup.remove(s.roots);
       if(s.cocopeat) rackGroup.remove(s.cocopeat);
-      s.plant = null; s.cocopeat = null;
+      s.plant = null; s.roots = null; s.cocopeat = null; s.species = null;
     });
     updateStats();
     showToast('Rack reset');
@@ -1532,6 +1986,8 @@
         if(pt) p.position.copy(pt);
       });
     }
+
+    updatePlantsGrowth();
 
     renderer.render(scene, camera);
   }
