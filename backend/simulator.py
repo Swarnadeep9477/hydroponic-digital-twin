@@ -287,23 +287,94 @@ VAN_HENTEN = {
 SECONDS_PER_DAY = 86400
 PAR_UMOL_PER_W = 4.6  # standard PAR photon-flux-to-irradiance conversion
 
+# ---- per-lever nutrient/pH/water/EC stress coupling into Van Henten ----
+# Van Henten's original equations assume ideal nutrition always. Rather than
+# bolting on one blanket "stress multiplier" (which would make every kind of
+# stress collapse into the same undifferentiated penalty), each stressor is
+# routed to the *specific* photosynthetic lever real plant physiology ties
+# it to, so a Mg deficiency and a K deficiency produce visibly different,
+# individually attributable effects instead of one generic number:
+#   - Nitrogen builds Rubisco -> scales the CO2-limited (carboxylation) term
+#     (Evans, J.R. 1989, "Photosynthesis and nitrogen relationships in
+#     leaves of C3 plants", Oecologia 78(1), 9-19).
+#   - Magnesium is the central atom of chlorophyll -> scales quantum
+#     (light-capture) efficiency directly.
+#   - Potassium drives guard-cell turgor -> scales stomatal conductance
+#     (classic stomatal physiology, e.g. Humble & Raschke 1971).
+#   - Water stress and EC/salinity both act on the same guard-cell turgor
+#     mechanism as potassium, so they multiply into the same stomatal
+#     conductance term rather than getting a separate lever (the standard
+#     multiplicative-conductance approach to environmental stress, per
+#     Jarvis, P.G. 1976, Phil. Trans. R. Soc. B 273(927), 593-610).
+#   - pH doesn't touch photosynthesis directly - it gates how much of the
+#     N/K/Mg in the tank actually reaches the plant, via the same per-
+#     nutrient availability-window shape used elsewhere in this file.
+#   - Phosphorus and calcium have no comparably clean single-parameter hook
+#     in Van Henten's simplified two-term co-limitation model (P's role is
+#     RuBP-regeneration/ATP limitation, a third limitation branch this model
+#     doesn't have; Ca is structural/signaling, not a photosynthesis input)
+#     - both are deliberately left unwired here and continue to only affect
+#     the traditional Gompertz/Liebig model.
+PH_NUTRIENT_AVAILABILITY = {
+    "N":  (4.5, 5.0, 7.5, 8.0),
+    "K":  (4.0, 4.5, 8.0, 8.5),
+    "Mg": (5.0, 6.0, 8.0, 8.5),
+}
 
-def _van_henten_rates(xsdm: float, xnsdm: float, temp_c: float, ppfd: float, co2_ppm: float) -> tuple:
+
+def _ph_availability(ph: float, key: str) -> float:
+    lo_min, lo, hi, hi_max = PH_NUTRIENT_AVAILABILITY[key]
+    if ph <= lo_min or ph >= hi_max:
+        return 0.0
+    if ph < lo:
+        return (ph - lo_min) / (lo - lo_min)
+    if ph <= hi:
+        return 1.0
+    return (hi_max - ph) / (hi_max - hi)
+
+
+def _nutrient_capacity(ppm: float, opt: float, ph: float, key: str) -> float:
+    """Saturating (diminishing-returns) photosynthetic-capacity credit for
+    one nutrient, same functional family as dli_factor: reaches ~90% right
+    at the species' own optimum ppm, with pH-gated availability applied
+    first via _ph_availability."""
+    eff = ppm * _ph_availability(ph, key)
+    half_sat = opt / 2.3
+    if half_sat <= 0:
+        return 1.0
+    return 1 - math.exp(-eff / half_sat)
+
+
+def _van_henten_rates(xsdm: float, xnsdm: float, temp_c: float, ppfd: float, co2_ppm: float, sp: dict,
+                       cap_n: float = 1.0, cap_mg: float = 1.0, g_stm_mult: float = 1.0) -> tuple:
     c = VAN_HENTEN
     irradiance = ppfd / PAR_UMOL_PER_W  # umol.m-2.s-1 PPFD -> W.m-2 PAR
 
     compensation_pt = c["c_Gamma"] * c["c_Q10_Gamma"] ** ((temp_c - 20) / 10)
-    quantum_eff = c["c_epsilon"] * (co2_ppm - compensation_pt) / (co2_ppm + 2 * compensation_pt)
+    # cap_mg: magnesium/chlorophyll throttle on light-capture efficiency
+    quantum_eff = c["c_epsilon"] * cap_mg * (co2_ppm - compensation_pt) / (co2_ppm + 2 * compensation_pt)
 
     # canopy CO2 conductance: boundary-layer, stomatal and carboxylation
-    # resistances in series (temperature-dependent carboxylation term)
+    # resistances in series (temperature-dependent carboxylation term).
+    # g_stm_mult folds in potassium/water/EC - all three throttle the same
+    # guard-cell turgor mechanism, so they combine multiplicatively here.
     g_car = max(1e-6, -1.32e-5 * temp_c ** 2 + 5.94e-4 * temp_c - 2.64e-3)
-    g_co2 = 1 / (1 / c["g_bnd"] + 1 / c["g_stm"] + 1 / g_car)
+    g_stm_eff = max(1e-6, c["g_stm"] * g_stm_mult)
+    g_co2 = 1 / (1 / c["g_bnd"] + 1 / g_stm_eff + 1 / g_car)
 
     co2_gradient = co2_ppm - compensation_pt
     light_term = quantum_eff * irradiance
-    co2_term = g_co2 * c["c_omega"] * co2_gradient
+    # cap_n: nitrogen/Rubisco throttle on carboxylation capacity
+    co2_term = g_co2 * c["c_omega"] * co2_gradient * cap_n
     f_phot_max = max(0.0, (light_term * co2_term) / (light_term + co2_term)) if (light_term + co2_term) > 0 else 0.0
+
+    # Van Henten's 1994 model has no photoinhibition term of its own - it was
+    # validated within a PPFD range that never triggers it. This UI's slider
+    # goes well past lettuce's photoinhibitionThresholdPpfd, so we reuse the
+    # same empirical penalty applied to the generic model to keep both paths
+    # consistent at high light rather than letting Van Henten extrapolate
+    # unbounded growth benefit from PPFD the plant can't actually use.
+    f_phot_max *= photoinhibition_factor(ppfd, sp)
 
     canopy_closure = 1 - math.exp(-c["c_K"] * c["c_lar"] * (1 - c["c_tau"]) * xsdm)
     f_phot = canopy_closure * f_phot_max
@@ -324,21 +395,27 @@ SUBSTEPS_PER_PHASE = 24  # numerical-integration resolution within each light/da
 
 
 def simulate_lettuce_van_henten(temp: float, ppfd: float, co2_ppm: float,
-                                 plant_density: float, harvest_target_g: float,
+                                 plant_density: float, harvest_target_g: float, sp: dict,
+                                 nutrients: dict, ph: float, water_available: bool = True,
                                  light_hours: float = 16, days_horizon: int = 50) -> dict:
     """
     Day-by-day integration of the Van Henten two-state ODE model, holding
-    temp/ppfd/co2 fixed across the run (same "set the dials once" convention
-    as the rest of this simulator). Each day is split into a lit phase
-    (photosynthesis + respiration, light_hours long) and a dark phase
-    (respiration only, drawing down the non-structural reserve - real
-    plants keep growing/respiring overnight on stored carbohydrate, they
-    just stop fixing new carbon) rather than treating PPFD as if it were
-    constant for all 24 hours, which would double-count light hours the
-    plant doesn't get and badly overstate growth. Each phase is
-    substepped for numerical accuracy, since the early growth phase is
-    numerically stiff (Xnsdm/Xsdm ratio, and hence r_gr, changes fast
-    while Xsdm is still small).
+    temp/ppfd/co2/nutrients/ph/water fixed across the run (same "set the
+    dials once" convention as the rest of this simulator). Each day is
+    split into a lit phase (photosynthesis + respiration, light_hours long)
+    and a dark phase (respiration only, drawing down the non-structural
+    reserve - real plants keep growing/respiring overnight on stored
+    carbohydrate, they just stop fixing new carbon) rather than treating
+    PPFD as if it were constant for all 24 hours, which would double-count
+    light hours the plant doesn't get and badly overstate growth. Each
+    phase is substepped for numerical accuracy, since the early growth
+    phase is numerically stiff (Xnsdm/Xsdm ratio, and hence r_gr, changes
+    fast while Xsdm is still small).
+
+    Nitrogen/potassium/magnesium, pH, water availability and EC each throttle
+    a specific photosynthetic lever rather than one shared penalty - see the
+    per-lever stress coupling comment above _van_henten_rates. Phosphorus and
+    calcium have no such hook here and only affect the traditional model.
 
     Returns per-day and final structural/non-structural/leaf/root/total
     biomass plus days-to-harvest against a target fresh head weight.
@@ -348,6 +425,14 @@ def simulate_lettuce_van_henten(temp: float, ppfd: float, co2_ppm: float,
     past that window shouldn't be trusted as more than a rough trend.
     """
     c = VAN_HENTEN
+    opt = sp["nutrientOptima"]
+    cap_n = _nutrient_capacity(nutrients["N"], opt["N"], ph, "N")
+    cap_k = _nutrient_capacity(nutrients["K"], opt["K"], ph, "K")
+    cap_mg = _nutrient_capacity(nutrients["Mg"], opt["Mg"], ph, "Mg")
+    water_f = 1.0 if water_available else 0.0
+    ec_f = ec_factor(compute_ec(nutrients), sp)
+    g_stm_mult = cap_k * water_f * ec_f
+
     xsdm, xnsdm = c["xsdm0"], c["xnsdm0"]
     trajectory = []
     days_to_harvest = None
@@ -379,7 +464,8 @@ def simulate_lettuce_van_henten(temp: float, ppfd: float, co2_ppm: float,
                 continue
             dt = phase_seconds / SUBSTEPS_PER_PHASE
             for _ in range(SUBSTEPS_PER_PHASE):
-                d_xsdm, d_xnsdm = _van_henten_rates(xsdm, xnsdm, temp, phase_ppfd, co2_ppm)
+                d_xsdm, d_xnsdm = _van_henten_rates(xsdm, xnsdm, temp, phase_ppfd, co2_ppm, sp,
+                                                     cap_n=cap_n, cap_mg=cap_mg, g_stm_mult=g_stm_mult)
                 xsdm = max(0.0, xsdm + d_xsdm * dt)
                 xnsdm = max(0.0, xnsdm + d_xnsdm * dt)
 
@@ -397,6 +483,18 @@ def simulate_lettuce_van_henten(temp: float, ppfd: float, co2_ppm: float,
         "co2": co2_ppm,
         "harvestTargetG": harvest_target_g,
         "trajectory": trajectory,
+        # per-lever stress breakdown (1.0 = no penalty) - lets the UI show
+        # *which* stressor is responsible for lost yield, not just that one
+        # exists. See the per-lever stress coupling comment above
+        # _van_henten_rates for what each one physically represents.
+        "stressFactors": {
+            "nitrogenCapacity": round(cap_n, 4),
+            "potassiumCapacity": round(cap_k, 4),
+            "magnesiumCapacity": round(cap_mg, 4),
+            "waterFactor": round(water_f, 4),
+            "ecFactor": round(ec_f, 4),
+            "stomatalConductanceMultiplier": round(g_stm_mult, 4),
+        },
     }
 
 
@@ -535,6 +633,8 @@ def simulate(params: dict) -> dict:
             co2_ppm=params.get("co2", 420),
             plant_density=params.get("plant_density", 20),
             harvest_target_g=params.get("harvest_target_g", 200),
+            sp=sp,
+            nutrients=nutrients, ph=ph, water_available=water_available,
             light_hours=params.get("light_hours", 16),
             days_horizon=min(sp["daysHorizon"], 50),
         )

@@ -342,7 +342,7 @@
   nutrientBackdrop.addEventListener('click', closeNutrientPopup);
   window.addEventListener('keydown', (e)=>{
     if(e.key === 'Escape'){
-      closeNutrientPopup(); closeLightPopup();
+      closeNutrientPopup(); closeLightPopup(); closeChartsPopup();
       if(connecting.active){ cancelConnecting(); showToast('Connection cancelled', true); }
       hideCtxMenu();
     }
@@ -1209,7 +1209,7 @@
   // a real prediction, then plays back the returned day-by-day trajectory
   // ============================================================
   const GROWTH_ENGINE_URL = 'http://localhost:8000/simulate';
-  const SEEDLING_SCALE = 0.09, FULL_SCALE = 0.55;
+  const SEEDLING_SCALE = 0.09, FULL_SCALE = 0.85; // hole spacing (1.05 units) comfortably clears this with room to spare
   const PLAYBACK_SECONDS_PER_DAY = 2.5; // how fast the predicted trajectory plays out visually
   const STRESS_TINT_OUTER = 0.7, STRESS_TINT_INNER = 0.35, STRESS_TINT_CORE = 0.25;
   const SYMPTOM_TINT_BOOST = 0.6;
@@ -1234,6 +1234,8 @@
     });
   });
   const harvestReportEl = document.getElementById('harvest-report');
+  const lettuceModelSelect = document.getElementById('lettuce-model-select');
+  function currentLettuceModel(){ return lettuceModelSelect.value; } // 'traditional' | 'vanhenten'
 
   function plantedSpeciesList(){
     return [...new Set(holeState.filter(s=>s.plant).map(s=>s.species))];
@@ -1243,6 +1245,60 @@
     harvestReportEl.hidden = false;
     harvestReportEl.innerHTML = speciesList.map(species=>{
       const m = mechanisticsBySpecies[species];
+      const useVanHenten = species === 'lettuce' && m.vanHenten && currentLettuceModel() === 'vanhenten';
+
+      if(useVanHenten){
+        const vh = m.vanHenten;
+        const sf = vh.stressFactors || {};
+        const headline = vh.willReachHarvest
+          ? '<span class="ok">✓ Target fresh weight in ' + vh.daysToHarvest + ' simulated days</span>'
+          : '<span class="fail">✕ Won\'t hit target fresh weight in the simulated window</span>';
+
+        const tiles = [
+          ['Fresh weight', vh.finalFreshWeightG, 'g/plant'],
+          ['Total dry', vh.finalTotalBiomassG, 'g/plant'],
+          ['Leaf', vh.finalLeafBiomassG, 'g/plant'],
+          ['Root', vh.finalRootBiomassG, 'g/plant'],
+        ];
+        const tilesHtml = tiles.map(([label,num,unit])=>
+          '<div class="stat-tile"><div class="stat-num">'+num+'<span class="stat-unit">'+unit+'</span></div><div class="stat-label">'+label+'</div></div>'
+        ).join('');
+
+        const technicalLine = 'SDM ' + vh.finalSdmGm2 + ' g/m² · NSDM ' + vh.finalNsdmGm2 + ' g/m² · total ' + vh.finalTotalBiomassGm2 + ' g/m²';
+        const runLine = vh.plantDensity + ' plants/m² · ' + vh.co2 + ' ppm CO₂ · ' + vh.harvestTargetG + 'g target';
+
+        const pct = x => (x!=null?x:1);
+        const barColor = f => f >= 0.85 ? 'var(--led-green)' : f >= 0.5 ? '#e0b84a' : 'var(--warn)';
+        const stressRows = [
+          ['Nitrogen', sf.nitrogenCapacity],
+          ['Potassium', sf.potassiumCapacity],
+          ['Magnesium', sf.magnesiumCapacity],
+          ['Water', sf.waterFactor],
+          ['EC / salinity', sf.ecFactor],
+          ['Stomatal conductance', sf.stomatalConductanceMultiplier],
+        ];
+        const stressRowsHtml = stressRows.map(([label,raw])=>{
+          const f = pct(raw);
+          const pctText = Math.round(f*1000)/10 + '%';
+          return '<div class="stress-row">' +
+            '<div class="stress-row-top"><span>'+label+'</span><span>'+pctText+'</span></div>' +
+            '<div class="bar-track"><div class="bar-fill" style="width:'+Math.round(f*100)+'%; background:'+barColor(f)+'"></div></div>' +
+          '</div>';
+        }).join('');
+
+        return '<div class="report-card">' +
+          '<div class="report-species">' + (SPECIES_LABELS[species]||species) + ' — Van Henten model</div>' +
+          '<div class="report-row report-headline">' + headline + '</div>' +
+          '<div class="stat-tiles">' + tilesHtml + '</div>' +
+          '<div class="report-technical">' + technicalLine + '</div>' +
+          '<div class="report-technical">' + runLine + '</div>' +
+          '<div class="report-row report-headline" style="margin-top:12px">Stress factors</div>' +
+          '<div class="stress-meters">' + stressRowsHtml + '</div>' +
+          '<div class="report-symptoms">N/K/Mg, pH (via nutrient availability), water and EC each throttle a specific photosynthesis lever. P and Ca have no mechanistic hook in this model and are ignored here.</div>' +
+          '<button class="report-charts-btn" data-charts-species="' + species + '">📊 View charts</button>' +
+        '</div>';
+      }
+
       const fq = m.finalQuality;
       const headline = m.willReachHarvest
         ? '<span class="ok">✓ Harvest in ' + m.daysToHarvest + ' simulated days</span>'
@@ -1253,46 +1309,156 @@
         : [['Leaves', fq.leafCount], ['Biomass', fq.biomassG + ' g'], ['Canopy', fq.canopyCm + ' cm'], ['Grade', fq.grade]];
       const rowsHtml = rows.map(([k,v])=> '<div><span class="k">'+k+'</span><span class="v">'+v+'</span></div>').join('');
 
-      let vanHentenHtml = '';
-      if(m.vanHenten){
-        const vh = m.vanHenten;
-        const vhHeadline = vh.willReachHarvest
-          ? '<span class="ok">✓ Target fresh weight in ' + vh.daysToHarvest + ' days</span>'
-          : '<span class="fail">✕ Won\'t hit target fresh weight in the simulated window</span>';
-        const vhRows = [
-          ['Structural DM (SDM)', vh.finalSdmGm2 + ' g/m²'],
-          ['Non-structural DM (NSDM)', vh.finalNsdmGm2 + ' g/m²'],
-          ['Leaf biomass', vh.finalLeafBiomassG + ' g/plant'],
-          ['Root biomass', vh.finalRootBiomassG + ' g/plant'],
-          ['Total dry biomass', vh.finalTotalBiomassG + ' g/plant'],
-          ['Fresh weight', vh.finalFreshWeightG + ' g/plant'],
-        ];
-        const vhRowsHtml = vhRows.map(([k,v])=> '<div><span class="k">'+k+'</span><span class="v">'+v+'</span></div>').join('');
-        vanHentenHtml =
-          '<div class="report-row report-headline" style="margin-top:8px">Van Henten biomass model</div>' +
-          '<div class="report-row">' + vhHeadline + '</div>' +
-          '<div class="report-grid">' + vhRowsHtml + '</div>';
-      }
-
       return '<div class="report-card">' +
         '<div class="report-species">' + (SPECIES_LABELS[species]||species) + '</div>' +
         '<div class="report-row report-headline">' + headline + '</div>' +
         '<div class="report-grid">' + rowsHtml + '</div>' +
         '<div class="report-symptoms">' + m.symptoms.join(' · ') + '</div>' +
-        vanHentenHtml +
+        '<button class="report-charts-btn" data-charts-species="' + species + '">📊 View charts</button>' +
       '</div>';
     }).join('');
   }
 
+  // ============================================================
+  // TRAJECTORY CHARTS — Chart.js line charts of the predicted run,
+  // shaped differently per model (see openChartsFor below)
+  // ============================================================
+  const chartsBackdrop = document.getElementById('charts-backdrop');
+  const chartsPopup = document.getElementById('charts-popup');
+  const chartsPopupTitle = document.getElementById('charts-popup-title');
+  const chartsPopupSub = document.getElementById('charts-popup-sub');
+  const chartsGridEl = document.getElementById('charts-grid');
+  let activeCharts = [];
+
+  const CHART_COLORS = { green:'#7ee08a', purple:'#c98bff', warn:'#ff5566', muted:'#7f9a8e', text:'#e6f3ec', grid:'rgba(140,200,170,0.14)' };
+
+  function closeChartsPopup(){
+    chartsBackdrop.style.display = 'none';
+    chartsPopup.style.display = 'none';
+    activeCharts.forEach(c=> c.destroy());
+    activeCharts = [];
+  }
+  document.getElementById('charts-popup-close').addEventListener('click', closeChartsPopup);
+  chartsBackdrop.addEventListener('click', closeChartsPopup);
+
+  function makeLineChart(title, labels, datasets){
+    const card = document.createElement('div');
+    card.className = 'chart-card';
+    const h4 = document.createElement('h4');
+    h4.textContent = title;
+    const canvas = document.createElement('canvas');
+    card.appendChild(h4);
+    card.appendChild(canvas);
+    chartsGridEl.appendChild(card);
+
+    const chart = new Chart(canvas.getContext('2d'), {
+      type: 'line',
+      data: { labels, datasets: datasets.map(d=> ({
+        pointRadius: 0, borderWidth: 2, tension: 0.25, fill: false, ...d,
+      })) },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: { display: datasets.length > 1, labels: { color: CHART_COLORS.muted, boxWidth: 10, font: { size: 10 } } },
+          tooltip: { titleColor: CHART_COLORS.text, bodyColor: CHART_COLORS.text, backgroundColor: '#0d1815', borderColor: CHART_COLORS.grid, borderWidth: 1 },
+        },
+        scales: {
+          x: { title: { display: true, text: 'day', color: CHART_COLORS.muted, font: { size: 10 } },
+               ticks: { color: CHART_COLORS.muted, font: { size: 9 }, maxTicksLimit: 8 }, grid: { color: CHART_COLORS.grid } },
+          y: { ticks: { color: CHART_COLORS.muted, font: { size: 9 } }, grid: { color: CHART_COLORS.grid } },
+        },
+      },
+    });
+    activeCharts.push(chart);
+    return chart;
+  }
+
+  function renderCharts(species){
+    chartsGridEl.innerHTML = '';
+    activeCharts.forEach(c=> c.destroy());
+    activeCharts = [];
+
+    const mech = latestMechanistics[species];
+    if(!mech) return;
+    const useVanHenten = species === 'lettuce' && mech.vanHenten && currentLettuceModel() === 'vanhenten';
+    chartsPopupTitle.textContent = (SPECIES_LABELS[species]||species) + ' — ' + (useVanHenten ? 'Van Henten model' : 'Traditional model');
+
+    if(useVanHenten){
+      const traj = mech.vanHenten.trajectory;
+      const days = traj.map(p=> p.day);
+      chartsPopupSub.textContent = '// dry-matter dynamics from the mechanistic ODE model';
+
+      makeLineChart('Structural vs non-structural dry matter (g/m²)', days, [
+        { label:'SDM', data: traj.map(p=>p.sdmGm2), borderColor: CHART_COLORS.green, backgroundColor: CHART_COLORS.green },
+        { label:'NSDM', data: traj.map(p=>p.nsdmGm2), borderColor: CHART_COLORS.purple, backgroundColor: CHART_COLORS.purple },
+      ]);
+      makeLineChart('Fresh weight vs harvest target (g/plant)', days, [
+        { label:'Fresh weight', data: traj.map(p=>p.freshWeightG), borderColor: CHART_COLORS.green, backgroundColor: CHART_COLORS.green },
+        { label:'Harvest target', data: traj.map(()=> mech.vanHenten.harvestTargetG), borderColor: CHART_COLORS.warn, backgroundColor: CHART_COLORS.warn, borderDash:[6,4] },
+      ]);
+      makeLineChart('Leaf vs root biomass (g/plant)', days, [
+        { label:'Leaf', data: traj.map(p=>p.leafBiomassG), borderColor: CHART_COLORS.green, backgroundColor: CHART_COLORS.green },
+        { label:'Root', data: traj.map(p=>p.rootBiomassG), borderColor: '#e7dcc2', backgroundColor: '#e7dcc2' },
+      ]);
+      makeLineChart('Total dry biomass (g/m²)', days, [
+        { label:'Total dry biomass', data: traj.map(p=>p.totalBiomassGm2), borderColor: CHART_COLORS.green, backgroundColor: CHART_COLORS.green },
+      ]);
+    } else {
+      const traj = mech.trajectory;
+      const days = traj.map(p=> p.day);
+      chartsPopupSub.textContent = '// Gompertz/GDD maturity curve and derived quality metrics';
+
+      makeLineChart('Maturity', days, [
+        { label:'Maturity', data: traj.map(p=>p.maturity), borderColor: CHART_COLORS.green, backgroundColor: CHART_COLORS.green },
+      ]);
+      if(mech.cropType === 'fruiting'){
+        makeLineChart('Total yield (g)', days, [
+          { label:'Total yield', data: traj.map(p=>p.totalYieldG), borderColor: CHART_COLORS.green, backgroundColor: CHART_COLORS.green },
+        ]);
+        makeLineChart('Fruit count', days, [
+          { label:'Fruit count', data: traj.map(p=>p.fruitCount), borderColor: CHART_COLORS.purple, backgroundColor: CHART_COLORS.purple },
+        ]);
+      } else {
+        makeLineChart('Biomass (g)', days, [
+          { label:'Biomass', data: traj.map(p=>p.biomassG), borderColor: CHART_COLORS.green, backgroundColor: CHART_COLORS.green },
+        ]);
+        makeLineChart('Leaf count', days, [
+          { label:'Leaf count', data: traj.map(p=>p.leafCount), borderColor: CHART_COLORS.purple, backgroundColor: CHART_COLORS.purple },
+        ]);
+      }
+      makeLineChart('Canopy diameter (cm)', days, [
+        { label:'Canopy', data: traj.map(p=>p.canopyCm), borderColor: CHART_COLORS.green, backgroundColor: CHART_COLORS.green },
+      ]);
+    }
+  }
+
+  function openChartsFor(species){
+    if(!latestMechanistics[species]){ showToast('Run the simulation first', true); return; }
+    renderCharts(species);
+    chartsBackdrop.style.display = 'block';
+    chartsPopup.style.display = 'block';
+  }
+
+  harvestReportEl.addEventListener('click', (e)=>{
+    const btn = e.target.closest('[data-charts-species]');
+    if(!btn) return;
+    openChartsFor(btn.dataset.chartsSpecies);
+  });
+
+  function pauseSimulation(statusText, toastMsg){
+    simRunning = false;
+    lastGrowthFrameTime = null;
+    runSimBtn.textContent = '▶ Run Simulation';
+    runSimBtn.classList.remove('running');
+    simStatusEl.textContent = statusText;
+    simStatusEl.classList.remove('live');
+    showToast(toastMsg);
+  }
+
   runSimBtn.addEventListener('click', async ()=>{
     if(simRunning){
-      simRunning = false;
-      lastGrowthFrameTime = null;
-      runSimBtn.textContent = '▶ Run Simulation';
-      runSimBtn.classList.remove('running');
-      simStatusEl.textContent = 'Paused — growth is frozen until you hit Run';
-      simStatusEl.classList.remove('live');
-      showToast('Simulation paused');
+      pauseSimulation('Paused — growth is frozen until you hit Run', 'Simulation paused');
       return;
     }
 
@@ -1382,6 +1548,22 @@
     return { maturity: lerp('maturity'), leafCount: lerp('leafCount'), fruitCount: lerp('fruitCount'), fruitWeightG: lerp('fruitWeightG') };
   }
 
+  // Van Henten's trajectory has no 'maturity' field (it reports dry-matter
+  // grams, not a 0-1 phenological curve) - derive an equivalent progress
+  // fraction from fresh weight vs. the harvest target so it can drive the
+  // same plant.scale/root-length animation as the traditional model does.
+  function sampleVanHentenTrajectory(vh, days){
+    const trajectory = vh.trajectory;
+    const maxDay = trajectory.length - 1;
+    const clamped = Math.max(0, Math.min(maxDay, days));
+    const i0 = Math.floor(clamped), i1 = Math.min(maxDay, i0+1);
+    const t = clamped - i0;
+    const a = trajectory[i0], b = trajectory[i1];
+    const freshWeightG = a.freshWeightG + (b.freshWeightG - a.freshWeightG) * t;
+    const maturity = Math.max(0, Math.min(1, freshWeightG / vh.harvestTargetG));
+    return { maturity, leafCount: null, fruitCount: null, fruitWeightG: null };
+  }
+
   function applyTrajectoryPointToPlant(plant, point, outerSymptom, innerSymptom, stress){
     const s = point.maturity;
     plant.scale.setScalar(SEEDLING_SCALE + (FULL_SCALE - SEEDLING_SCALE) * s);
@@ -1447,18 +1629,27 @@
 
     simDaysGlobal += dayStep;
     simDayValueEl.textContent = Math.floor(simDaysGlobal);
+    let anyPlanted = false, allDone = true;
     holeState.forEach(state=>{
       const plant = state.plant;
       if(!plant) return;
-      const trajectory = latestTrajectories[state.species];
       const mech = latestMechanistics[state.species];
-      if(!trajectory || !mech) return;
+      if(!mech) return;
+      anyPlanted = true;
+      const useVanHenten = state.species === 'lettuce' && mech.vanHenten && currentLettuceModel() === 'vanhenten';
+      const trajectory = useVanHenten ? mech.vanHenten.trajectory : latestTrajectories[state.species];
+      if(!trajectory) return;
       plant.userData.simDays += dayStep;
-      const point = sampleTrajectory(trajectory, plant.userData.simDays);
+      const point = useVanHenten
+        ? sampleVanHentenTrajectory(mech.vanHenten, plant.userData.simDays)
+        : sampleTrajectory(trajectory, plant.userData.simDays);
 
       if(plant.userData.cropType === 'fruiting'){
         const finalPoint = trajectory[trajectory.length-1];
         applyTomatoPoint(plant, point, finalPoint, mech.outerSymptom, mech.secondarySymptom, mech.stress);
+      } else if(useVanHenten){
+        // pure mechanistic model - no stress/deficiency concept, so no tinting
+        applyTrajectoryPointToPlant(plant, point, null, null, 0);
       } else {
         applyTrajectoryPointToPlant(plant, point, mech.outerSymptom, mech.secondarySymptom, mech.stress);
       }
@@ -1468,7 +1659,17 @@
         plant.userData.harvestNotified = true;
         showToast((SPECIES_LABELS[state.species]||'Plant') + ' ready to harvest');
       }
+
+      // "done" = nothing left this trajectory can show us: harvest day if
+      // it's reached, otherwise the last day the backend actually simulated
+      const modelResult = useVanHenten ? mech.vanHenten : mech;
+      const doneDay = modelResult.willReachHarvest ? modelResult.daysToHarvest : (trajectory.length - 1);
+      if(plant.userData.simDays < doneDay) allDone = false;
     });
+
+    if(simRunning && anyPlanted && allDone){
+      pauseSimulation('Harvest reached — simulation stopped', 'All planted crops have reached harvest — simulation stopped');
+    }
   }
 
 

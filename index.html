@@ -94,6 +94,16 @@
       </div>
       <div class="flow-note">Sets how many photons per second hit the canopy. This stays in sync with the slider in the sidebar.</div>
     </div>
+
+    <div id="charts-backdrop"></div>
+    <div id="charts-popup">
+      <div class="popup-header">
+        <h3 id="charts-popup-title">Charts</h3>
+        <button id="charts-popup-close" aria-label="Close">×</button>
+      </div>
+      <p class="panel-sub" id="charts-popup-sub">// predicted trajectory for this simulation run</p>
+      <div id="charts-grid"></div>
+    </div>
   </div>
 
   <div id="sidebar">
@@ -101,6 +111,13 @@
     <div class="panel" id="sim-panel">
       <h3>Simulation</h3>
       <p class="panel-sub">// set your parameters below, then run it</p>
+      <div id="lettuce-model-row">
+        <label for="lettuce-model-select">Lettuce growth model</label>
+        <select id="lettuce-model-select">
+          <option value="traditional">Traditional (Gompertz + Liebig's Law)</option>
+          <option value="vanhenten">Van Henten (mechanistic dry-matter model)</option>
+        </select>
+      </div>
       <button id="run-sim-btn">▶ Run Simulation</button>
       <div id="sim-status">Paused — growth is frozen until you hit Run</div>
       <div id="sim-day-readout" hidden>Simulated day: <span id="sim-day-value">0</span></div>
@@ -314,6 +331,7 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.1/chart.umd.min.js"></script>
 <script src="js/script.js"></script>
 </body>
 </html>
