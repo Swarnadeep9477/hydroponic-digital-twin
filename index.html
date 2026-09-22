@@ -219,13 +219,13 @@
         <input type="range" id="co2-slider" min="300" max="1500" step="10" value="420">
       </div>
       <div class="ctrl-row">
-        <div class="ctrl-label"><span>Planting density</span><span class="val" id="density-val">20 plants/m²</span></div>
-        <input type="range" id="density-slider" min="5" max="40" step="1" value="20">
+        <div class="ctrl-label"><span>Planting density</span><span class="val">20 plants/m² (fixed)</span></div>
       </div>
       <div class="ctrl-row">
         <div class="ctrl-label"><span>Harvest target (fresh wt.)</span><span class="val" id="harvest-target-val">200 g/head</span></div>
         <input type="range" id="harvest-target-slider" min="50" max="500" step="10" value="200">
       </div>
+      <div class="flow-note">Density isn't a free dial - it's set by the rack itself: 54 holes over a 2.7 m² bed works out to 20 plants/m², so per-plant yield only changes with growing conditions, not with how many of the 54 holes you've actually filled.</div>
       <div class="flow-note">Drives the mechanistic structural/non-structural dry-matter prediction shown in the harvest report for lettuce, alongside the general maturity model used for every crop.</div>
     </div>
 

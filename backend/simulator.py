@@ -287,6 +287,20 @@ VAN_HENTEN = {
 SECONDS_PER_DAY = 86400
 PAR_UMOL_PER_W = 4.6  # standard PAR photon-flux-to-irradiance conversion
 
+# ---- planting density (fixed by the physical rack, not a free dial) ----
+# The 3D grow bed has a fixed 6-channel x 9-hole layout regardless of how
+# many of those holes are actually planted, so "plants per m^2" isn't
+# something a grower dials in independently here - it's a fact about the
+# rack. GROW_BED_AREA_M2 is a nominal floor-area assumption (not the 3D
+# scene's literal unit scale, which is sized for click/drag usability, not
+# real-world dimensions) chosen so the fixed hole count works out to the
+# literature-typical ~20 plants/m^2 NFT lettuce density. Held constant so
+# per-plant yield depends only on growing conditions, not on how many of
+# the 54 holes happen to be filled.
+GROW_BED_HOLES = 54
+GROW_BED_AREA_M2 = 2.7
+PLANT_DENSITY = GROW_BED_HOLES / GROW_BED_AREA_M2  # = 20 plants/m^2
+
 # ---- per-lever nutrient/pH/water/EC stress coupling into Van Henten ----
 # Van Henten's original equations assume ideal nutrition always. Rather than
 # bolting on one blanket "stress multiplier" (which would make every kind of
@@ -395,7 +409,7 @@ SUBSTEPS_PER_PHASE = 24  # numerical-integration resolution within each light/da
 
 
 def simulate_lettuce_van_henten(temp: float, ppfd: float, co2_ppm: float,
-                                 plant_density: float, harvest_target_g: float, sp: dict,
+                                 harvest_target_g: float, sp: dict,
                                  nutrients: dict, ph: float, water_available: bool = True,
                                  light_hours: float = 16, days_horizon: int = 50) -> dict:
     """
@@ -443,15 +457,15 @@ def simulate_lettuce_van_henten(temp: float, ppfd: float, co2_ppm: float,
         total_gm2 = xsdm + xnsdm
         leaf_gm2 = (1 - c["c_tau"]) * total_gm2
         root_gm2 = c["c_tau"] * total_gm2
-        total_g_per_plant = total_gm2 / plant_density
+        total_g_per_plant = total_gm2 / PLANT_DENSITY
         fresh_g_per_plant = total_g_per_plant / c["dry_matter_fraction"]
 
         trajectory.append({
             "day": day,
             "sdmGm2": round(xsdm, 4), "nsdmGm2": round(xnsdm, 4),
             "totalBiomassGm2": round(total_gm2, 4),
-            "leafBiomassG": round(leaf_gm2 / plant_density, 4),
-            "rootBiomassG": round(root_gm2 / plant_density, 4),
+            "leafBiomassG": round(leaf_gm2 / PLANT_DENSITY, 4),
+            "rootBiomassG": round(root_gm2 / PLANT_DENSITY, 4),
             "totalBiomassG": round(total_g_per_plant, 4),
             "freshWeightG": round(fresh_g_per_plant, 2),
         })
@@ -479,7 +493,7 @@ def simulate_lettuce_van_henten(temp: float, ppfd: float, co2_ppm: float,
         "finalRootBiomassG": final["rootBiomassG"],
         "finalTotalBiomassG": final["totalBiomassG"],
         "finalFreshWeightG": final["freshWeightG"],
-        "plantDensity": plant_density,
+        "plantDensity": PLANT_DENSITY,
         "co2": co2_ppm,
         "harvestTargetG": harvest_target_g,
         "trajectory": trajectory,
@@ -631,7 +645,6 @@ def simulate(params: dict) -> dict:
         result["vanHenten"] = simulate_lettuce_van_henten(
             temp=temp, ppfd=ppfd,
             co2_ppm=params.get("co2", 420),
-            plant_density=params.get("plant_density", 20),
             harvest_target_g=params.get("harvest_target_g", 200),
             sp=sp,
             nutrients=nutrients, ph=ph, water_available=water_available,

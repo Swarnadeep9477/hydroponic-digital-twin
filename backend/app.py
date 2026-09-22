@@ -51,7 +51,6 @@ class SimulateRequest(BaseModel):
     lightHours: float = Field(default=16, ge=0, le=24)
     # lettuce-only Van Henten model inputs - ignored for other species
     co2: float = Field(default=420, ge=300, le=1500)
-    plantDensity: float = Field(default=20, ge=5, le=40)
     harvestTargetG: float = Field(default=200, ge=50, le=500)
 
 
@@ -64,7 +63,6 @@ def simulate(req: SimulateRequest):
         "water_available": req.waterAvailable,
         "light_hours": req.lightHours,
         "co2": req.co2,
-        "plant_density": req.plantDensity,
         "harvest_target_g": req.harvestTargetG,
     }
     return {"mechanistic": simulator.simulate(params)}

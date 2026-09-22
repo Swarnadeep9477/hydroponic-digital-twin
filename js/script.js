@@ -309,20 +309,17 @@
   updateDoseScreen();
 
   // ============================================================
-  // LETTUCE BIOMASS MODEL INPUTS (Van Henten) - co2 / density / harvest target
+  // LETTUCE BIOMASS MODEL INPUTS (Van Henten) - co2 / harvest target
+  // (planting density is fixed by the rack's own 54-hole layout, not a
+  // slider - see GROW_BED_HOLES/GROW_BED_AREA_M2 in backend/simulator.py)
   // ============================================================
   const co2Slider = document.getElementById('co2-slider');
   const co2ValEl = document.getElementById('co2-val');
-  const densitySlider = document.getElementById('density-slider');
-  const densityValEl = document.getElementById('density-val');
   const harvestTargetSlider = document.getElementById('harvest-target-slider');
   const harvestTargetValEl = document.getElementById('harvest-target-val');
 
   co2Slider.addEventListener('input', (e)=>{
     co2ValEl.textContent = e.target.value + ' ppm';
-  });
-  densitySlider.addEventListener('input', (e)=>{
-    densityValEl.textContent = e.target.value + ' plants/m²';
   });
   harvestTargetSlider.addEventListener('input', (e)=>{
     harvestTargetValEl.textContent = e.target.value + ' g/head';
@@ -1481,7 +1478,6 @@
       nutrients: {N:nutrients.N, P:nutrients.P, K:nutrients.K, Ca:nutrients.Ca, Mg:nutrients.Mg},
       waterAvailable,
       co2: parseInt(co2Slider.value, 10),
-      plantDensity: parseInt(densitySlider.value, 10),
       harvestTargetG: parseInt(harvestTargetSlider.value, 10),
     };
 
