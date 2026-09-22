@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Formula Reference — Lettuce Growth Models</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+<style>
+  :root{
+    --bg-deep:#0a120f;
+    --bg-panel:#101c17;
+    --bg-panel-2:#0d1815;
+    --line: rgba(140,200,170,0.14);
+    --line-soft: rgba(140,200,170,0.08);
+    --text: #e6f3ec;
+    --muted: #7f9a8e;
+    --teal:#7ee08a;
+    --purple:#c98bff;
+    --warn:#ff9d6f;
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.25);
+    --shadow-md: 0 8px 24px rgba(0,0,0,0.35);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--bg-deep);color:var(--text);
+    font-family:'Space Grotesk',sans-serif; -webkit-font-smoothing:antialiased;}
+  body{
+    background:
+      radial-gradient(ellipse 90% 40% at 50% 0%, #16241d 0%, #0a120f 55%, #060a08 100%);
+    min-height:100vh;
+  }
+  ::selection{background:rgba(126,224,138,0.28);color:var(--text);}
+  ::-webkit-scrollbar{width:9px;height:9px;}
+  ::-webkit-scrollbar-thumb{background:rgba(140,200,170,0.2);border-radius:8px;}
+
+  a{color:var(--teal);}
+
+  header.page{
+    max-width:1180px; margin:0 auto; padding:48px 28px 28px;
+    border-bottom:1px solid var(--line);
+  }
+  header.page .kicker{
+    font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.12em;
+    color:var(--muted); text-transform:uppercase; margin-bottom:10px;
+  }
+  header.page h1{font-size:30px; font-weight:700; margin:0 0 10px; letter-spacing:-0.01em;}
+  header.page p{color:var(--muted); font-size:14.5px; line-height:1.65; max-width:760px; margin:0 0 16px;}
+  .back-link{
+    display:inline-flex; align-items:center; gap:6px;
+    font-family:'JetBrains Mono',monospace; font-size:11.5px; letter-spacing:0.04em;
+    color:var(--teal); text-decoration:none; border:1px solid rgba(126,224,138,0.3);
+    background:rgba(126,224,138,0.07); padding:7px 13px; border-radius:20px;
+    transition:background .15s ease, border-color .15s ease;
+  }
+  .back-link:hover{background:rgba(126,224,138,0.14); border-color:rgba(126,224,138,0.5);}
+
+  main{max-width:1180px; margin:0 auto; padding:36px 28px 90px;}
+
+  .models{display:grid; grid-template-columns:1fr 1fr; gap:26px;}
+  @media (max-width:920px){ .models{grid-template-columns:1fr;} }
+
+  .model{
+    background:var(--bg-panel); border:1px solid var(--line); border-radius:14px;
+    padding:26px 26px 30px; box-shadow:var(--shadow-md);
+    min-width:0;
+  }
+  .model.traditional{border-top:3px solid var(--teal);}
+  .model.vanhenten{border-top:3px solid var(--purple);}
+
+  .model h2{font-size:19px; margin:0 0 4px; letter-spacing:-0.01em;}
+  .model .tag{
+    font-family:'JetBrains Mono',monospace; font-size:10.5px; letter-spacing:0.08em;
+    text-transform:uppercase; margin-bottom:14px; display:block;
+  }
+  .model.traditional .tag{color:var(--teal);}
+  .model.vanhenten .tag{color:var(--purple);}
+
+  .model .lede{color:var(--muted); font-size:13px; line-height:1.6; margin:0 0 22px;}
+
+  h3.section-h{
+    font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.1em;
+    text-transform:uppercase; color:var(--muted); margin:28px 0 12px;
+    padding-bottom:8px; border-bottom:1px solid var(--line-soft);
+  }
+  .model h3.section-h:first-of-type{margin-top:0;}
+
+  table.const{width:100%; table-layout:fixed; border-collapse:collapse; font-size:12.5px; margin-bottom:6px;}
+  table.const th{
+    text-align:left; font-family:'JetBrains Mono',monospace; font-weight:500;
+    font-size:10px; letter-spacing:0.06em; text-transform:uppercase; color:var(--muted);
+    padding:6px 8px; border-bottom:1px solid var(--line);
+  }
+  table.const td{padding:6px 8px; border-bottom:1px solid var(--line-soft); vertical-align:top; overflow-wrap:break-word;}
+  table.const td.sym{font-family:'JetBrains Mono',monospace; color:var(--text); width:30%;}
+  table.const td.val{font-family:'JetBrains Mono',monospace; color:var(--warn); width:26%;}
+  table.const td.desc{color:var(--muted); line-height:1.5; width:44%;}
+  table.const tr:last-child td{border-bottom:none;}
+
+  .subgroup-label{
+    font-family:'JetBrains Mono',monospace; font-size:10.5px; color:var(--muted);
+    margin:16px 0 6px; opacity:0.85;
+  }
+
+  ol.formulas{list-style:none; margin:0; padding:0; counter-reset:f;}
+  ol.formulas > li{
+    counter-increment:f; margin-bottom:18px; padding-left:30px; position:relative;
+  }
+  ol.formulas > li::before{
+    content:counter(f); position:absolute; left:0; top:1px;
+    width:20px; height:20px; border-radius:5px; font-family:'JetBrains Mono',monospace;
+    font-size:10.5px; display:flex; align-items:center; justify-content:center;
+  }
+  .traditional ol.formulas > li::before{background:rgba(126,224,138,0.12); color:var(--teal); border:1px solid rgba(126,224,138,0.3);}
+  .vanhenten ol.formulas > li::before{background:rgba(201,139,255,0.12); color:var(--purple); border:1px solid rgba(201,139,255,0.3);}
+
+  .fname{font-weight:600; font-size:13.5px; margin-bottom:5px;}
+  .eq{
+    background:var(--bg-panel-2); border:1px solid var(--line-soft); border-radius:8px;
+    padding:10px 14px; margin:6px 0 8px; overflow-x:auto; font-size:14px;
+  }
+  .fdesc{color:var(--muted); font-size:12px; line-height:1.6;}
+  .fdesc code{
+    font-family:'JetBrains Mono',monospace; background:rgba(140,200,170,0.08);
+    padding:1px 5px; border-radius:4px; font-size:11px; color:var(--text);
+  }
+
+  .divider{margin:26px 0 24px; height:1px; background:var(--line);}
+
+  .shared-note{
+    grid-column:1/-1; background:var(--bg-panel-2); border:1px dashed var(--line);
+    border-radius:12px; padding:16px 20px; font-size:12.5px; color:var(--muted); line-height:1.7;
+  }
+  .shared-note b{color:var(--text);}
+
+  footer.page{
+    max-width:1180px; margin:0 auto; padding:0 28px 60px; color:var(--muted);
+    font-size:11.5px; line-height:1.8; font-family:'JetBrains Mono',monospace;
+  }
+  footer.page a{color:var(--muted); text-decoration:underline; text-decoration-color:var(--line);}
+</style>
+</head>
+<body>
+
+<header class="page">
+  <div class="kicker">NFT Hydroponic Digital Twin — Technical Reference</div>
+  <h1>Lettuce Growth Model — Formula &amp; Constant Reference</h1>
+  <p>
+    The simulator runs two independent growth models for lettuce side by side:
+    a phenomenological <b style="color:var(--teal)">Traditional (Gompertz / Liebig)</b> model shared
+    across all five species, and a mechanistic <b style="color:var(--purple)">Van&nbsp;Henten (1994)</b>
+    two-state ODE model specific to lettuce. This page documents every formula and constant
+    each one uses, exactly as implemented in <code style="font-family:'JetBrains Mono',monospace;">backend/simulator.py</code>.
+  </p>
+  <a class="back-link" href="index.html">← Back to simulator</a>
+</header>
+
+<main>
+  <div class="models">
+
+    <!-- ===================== TRADITIONAL MODEL ===================== -->
+    <section class="model traditional">
+      <span class="tag">Model A · Phenomenological</span>
+      <h2>Traditional (Gompertz / Liebig) Model</h2>
+      <p class="lede">
+        A sigmoidal maturity curve driven by accumulated Growing Degree Days (GDD), with
+        five independent stress factors (light, temperature, nutrients, pH, water/EC)
+        throttling both the pace of development and the final quality grade. Used for
+        all five species; values below are lettuce-specific.
+      </p>
+
+      <h3 class="section-h">Constants</h3>
+
+      <div class="subgroup-label">Gompertz curve shape (universal across species)</div>
+      <table class="const">
+        <tr><th>Symbol</th><th>Value</th><th>Meaning</th></tr>
+        <tr><td class="sym">B</td><td class="val">6</td><td class="desc">Curve steepness/asymptote shape constant</td></tr>
+        <tr><td class="sym">k</td><td class="val">0.15</td><td class="desc">Growth-rate (bulking speed) constant</td></tr>
+        <tr><td class="sym">REF</td><td class="val">40</td><td class="desc">Pseudo-day scale the constants were tuned against</td></tr>
+        <tr><td class="sym">NORM</td><td class="val">0.98524</td><td class="desc">= M(REF); normalizes maturity to saturate at 1.0</td></tr>
+        <tr><td class="sym">HARVEST_MATURITY</td><td class="val">0.95</td><td class="desc">Maturity threshold that counts as "harvested"</td></tr>
+      </table>
+
+      <div class="subgroup-label">Lettuce-specific</div>
+      <table class="const">
+        <tr><th>Symbol</th><th>Value</th><th>Meaning</th></tr>
+        <tr><td class="sym">T_base</td><td class="val">5 °C</td><td class="desc">Base temperature — no development below this</td></tr>
+        <tr><td class="sym">T_optLow – T_optHigh</td><td class="val">18 – 22 °C</td><td class="desc">Photosynthetic optimum plateau</td></tr>
+        <tr><td class="sym">T_max</td><td class="val">30 °C</td><td class="desc">Lethal ceiling — development stops</td></tr>
+        <tr><td class="sym">GDD_target</td><td class="val">500 °C·day</td><td class="desc">Thermal time to reach full maturity</td></tr>
+        <tr><td class="sym">DLI_optimal</td><td class="val">15.5 mol·m⁻²·d⁻¹</td><td class="desc">Optimal Daily Light Integral</td></tr>
+        <tr><td class="sym">PPFD_thresh</td><td class="val">380 µmol·m⁻²·s⁻¹</td><td class="desc">Photoinhibition onset threshold</td></tr>
+        <tr><td class="sym">PI_maxPenalty</td><td class="val">0.45</td><td class="desc">Max fractional penalty from photoinhibition</td></tr>
+        <tr><td class="sym">PPFD_ceiling</td><td class="val">800 µmol·m⁻²·s⁻¹</td><td class="desc">UI slider ceiling — shapes the penalty slope</td></tr>
+        <tr><td class="sym">pH_optimal</td><td class="val">6.0</td><td class="desc">Optimal nutrient-solution pH</td></tr>
+        <tr><td class="sym">pH_tolerance</td><td class="val">1.5</td><td class="desc">± band before pH factor reaches 0</td></tr>
+        <tr><td class="sym">N, P, K, Ca, Mg opt.</td><td class="val">180, 55, 230, 170, 55 ppm</td><td class="desc">Nutrient-optima table</td></tr>
+        <tr><td class="sym">EC_safeCeilingMult</td><td class="val">1.3×</td><td class="desc">Multiple of optimal EC before penalty starts</td></tr>
+        <tr><td class="sym">EC_dangerMult</td><td class="val">2.0×</td><td class="desc">Multiple of optimal EC at the penalty floor</td></tr>
+        <tr><td class="sym">EC_floor</td><td class="val">0.15</td><td class="desc">Minimum EC factor (never fully zero)</td></tr>
+        <tr><td class="sym">Leaves (seedling → harvest)</td><td class="val">2 → 28</td><td class="desc">Leaf count range across the cycle</td></tr>
+        <tr><td class="sym">Harvest weight</td><td class="val">220 g</td><td class="desc">Reference fresh weight at full maturity</td></tr>
+        <tr><td class="sym">Harvest canopy</td><td class="val">28 cm</td><td class="desc">Reference canopy diameter at full maturity</td></tr>
+        <tr><td class="sym">Days horizon</td><td class="val">90 d</td><td class="desc">Simulation cutoff</td></tr>
+      </table>
+
+      <h3 class="section-h">Formulas</h3>
+      <ol class="formulas">
+        <li>
+          <div class="fname">Gompertz maturity curve</div>
+          <div class="eq">$$ M(x) = \exp\!\big(-B \cdot e^{-k x}\big) $$</div>
+          <div class="fdesc">Universal sigmoid: slow establishment → fast bulking → plateau near harvest.</div>
+        </li>
+        <li>
+          <div class="fname">Temperature quality factor</div>
+          <div class="eq">$$
+            f_T(T)=\begin{cases}
+            0 & T\le T_{base}\ \text{or}\ T\ge T_{max}\\[2pt]
+            \dfrac{T-T_{base}}{T_{optLow}-T_{base}} & T_{base}&lt;T&lt;T_{optLow}\\[6pt]
+            1 & T_{optLow}\le T\le T_{optHigh}\\[4pt]
+            \max\!\Big(0,\,1-\dfrac{T-T_{optHigh}}{T_{max}-T_{optHigh}}\Big) & T&gt;T_{optHigh}
+            \end{cases}
+          $$</div>
+          <div class="fdesc">Floor / plateau / ceiling productivity response — photosynthetic efficiency, not raw phenology.</div>
+        </li>
+        <li>
+          <div class="fname">Daily GDD accumulation</div>
+          <div class="eq">$$ \text{gdd}(T) = \begin{cases} T-T_{base} & T_{base}&lt;T&lt;T_{max}\\ 0 & \text{otherwise}\end{cases} $$</div>
+          <div class="fdesc">Degrees above base, zeroed outside the viable window — paces the phenological clock.</div>
+        </li>
+        <li>
+          <div class="fname">Daily Light Integral</div>
+          <div class="eq">$$ \text{DLI} = \text{PPFD} \times \text{lightHours} \times 0.0036 $$</div>
+          <div class="fdesc">Converts instantaneous PPFD (µmol·m⁻²·s⁻¹) and photoperiod into mol·m⁻²·day⁻¹.</div>
+        </li>
+        <li>
+          <div class="fname">DLI factor (saturating)</div>
+          <div class="eq">$$ f_{DLI} = 1-e^{-\text{DLI}/h}, \qquad h = \dfrac{\text{DLI}_{optimal}}{2.3} $$</div>
+          <div class="fdesc">Diminishing-returns response to total daily light; reaches ~90% right at the species optimum.</div>
+        </li>
+        <li>
+          <div class="fname">Photoinhibition factor</div>
+          <div class="eq">$$
+            \text{slope}=\dfrac{P_{max}}{\text{PPFD}_{ceiling}-\text{PPFD}_{thresh}},\qquad
+            f_{PI}=1-\min\!\big(P_{max},\ \max(0,\text{PPFD}-\text{PPFD}_{thresh})\cdot\text{slope}\big)
+          $$</div>
+          <div class="fdesc">Separate mechanism from DLI saturation: penalizes sustained excess <i>instantaneous</i> PPFD regardless of duration.</div>
+        </li>
+        <li>
+          <div class="fname">Combined light factor</div>
+          <div class="eq">$$ f_{light} = f_{DLI}\times f_{PI} $$</div>
+        </li>
+        <li>
+          <div class="fname">pH factor</div>
+          <div class="eq">$$ f_{pH} = \max\!\Big(0,\ 1-\dfrac{|\text{pH}-\text{pH}_{optimal}|}{\text{pH}_{tolerance}}\Big) $$</div>
+        </li>
+        <li>
+          <div class="fname">Per-nutrient score</div>
+          <div class="eq">$$ s_i = \max\!\Big(0,\ 1-\dfrac{|c_i-\text{opt}_i|}{\text{opt}_i}\Big),\quad i\in\{N,P,K,Ca,Mg\} $$</div>
+        </li>
+        <li>
+          <div class="fname">Nutrient sufficiency — Liebig's Law of the Minimum</div>
+          <div class="eq">$$ f_{nut} = \min_i\, s_i $$</div>
+          <div class="fdesc">Growth is bottlenecked by whichever single nutrient is scarcest relative to its optimum (Liebig, 1840s).</div>
+        </li>
+        <li>
+          <div class="fname">Solution EC</div>
+          <div class="eq">$$ EC = \dfrac{\sum_i c_i}{700},\qquad EC_{optimal}=\dfrac{\sum_i \text{opt}_i}{700} $$</div>
+        </li>
+        <li>
+          <div class="fname">EC factor (osmotic ceiling)</div>
+          <div class="eq">$$
+            f_{EC}=\begin{cases}
+            1 & EC\le EC_{optimal}\cdot 1.3\\[4pt]
+            \max\!\Big(0.15,\ 1-\dfrac{EC-EC_{optimal}\cdot1.3}{EC_{optimal}\cdot(2.0-1.3)}\Big) & \text{otherwise}
+            \end{cases}
+          $$</div>
+          <div class="fdesc">Distinct from Liebig's law: penalizes total salt load even when every individual nutrient is sufficient.</div>
+        </li>
+        <li>
+          <div class="fname">Non-thermal throttle &amp; growth rate</div>
+          <div class="eq">$$ \eta = f_{light}\cdot f_{nut}\cdot f_{pH}\cdot f_{water}\cdot f_{EC},\qquad G=\eta\cdot f_T $$</div>
+          <div class="fdesc">A starved-of-light plant develops slower even if warm — thermal pacing and condition quality are modeled separately.</div>
+        </li>
+        <li>
+          <div class="fname">Stress index</div>
+          <div class="eq">$$ S = 1-\min(f_{nut},f_{pH},f_{water},f_{EC},f_T) $$</div>
+        </li>
+        <li>
+          <div class="fname">Pseudo-age &amp; maturity</div>
+          <div class="eq">$$
+            x = \dfrac{\sum \text{gdd}(T)\cdot\eta}{GDD_{target}}\times REF,\qquad
+            \mu = \min\!\Big(1,\ \dfrac{M(x)}{NORM}\Big)
+          $$</div>
+        </li>
+        <li>
+          <div class="fname">Leaf count, biomass, canopy</div>
+          <div class="eq">$$
+            L=L_0+(L_h-L_0)\mu,\qquad
+            W=\mu^{1.5}\cdot W_h,\qquad
+            C=3+(C_h-3)\mu
+          $$</div>
+        </li>
+        <li>
+          <div class="fname">Harvest &amp; grading</div>
+          <div class="eq">$$ \text{harvested when } \mu\ge 0.95 $$</div>
+          <div class="fdesc">Grade from stress <code>S</code>: A (&lt;0.10) · B (&lt;0.30) · C (&lt;0.60) · D (≥0.60) · F (never reaches harvest).</div>
+        </li>
+      </ol>
+    </section>
+
+    <!-- ===================== VAN HENTEN MODEL ===================== -->
+    <section class="model vanhenten">
+      <span class="tag">Model B · Mechanistic ODE</span>
+      <h2>Van Henten (1994) Model</h2>
+      <p class="lede">
+        A two-state dynamic model integrating structural (X<sub>sdm</sub>) and non-structural
+        (X<sub>nsdm</sub>) dry matter via coupled ODEs, with photosynthesis co-limited by light
+        and CO₂ through a Farquhar-style term. Lettuce-only; runs alongside Model A rather than
+        replacing it. Source: Van Henten, E.J. (1994), <i>Agricultural Systems</i> 45(1), 55–72;
+        cross-checked against Van Ooteghem (2007).
+      </p>
+
+      <h3 class="section-h">Constants — <code style="font-family:'JetBrains Mono',monospace;font-size:11px;">VAN_HENTEN</code></h3>
+      <table class="const">
+        <tr><th>Symbol</th><th>Value</th><th>Meaning</th></tr>
+        <tr><td class="sym">c_α (alpha)</td><td class="val">0.68</td><td class="desc">CO₂ → CH₂O conversion efficiency</td></tr>
+        <tr><td class="sym">c_β (beta)</td><td class="val">0.8</td><td class="desc">Growth yield factor (synthesis efficiency)</td></tr>
+        <tr><td class="sym">c_gr,max</td><td class="val">5×10⁻⁶ s⁻¹</td><td class="desc">Max specific growth rate @ 20 °C</td></tr>
+        <tr><td class="sym">c_γ (gamma)</td><td class="val">1.0</td><td class="desc">Growth-rate response shape coefficient</td></tr>
+        <tr><td class="sym">Q10_gr</td><td class="val">1.6</td><td class="desc">Growth-rate temperature sensitivity per 10 °C</td></tr>
+        <tr><td class="sym">c_resp,sht</td><td class="val">3.47×10⁻⁷ s⁻¹</td><td class="desc">Shoot maintenance respiration @ 25 °C</td></tr>
+        <tr><td class="sym">c_resp,rt</td><td class="val">1.16×10⁻⁷ s⁻¹</td><td class="desc">Root maintenance respiration @ 25 °C</td></tr>
+        <tr><td class="sym">Q10_resp</td><td class="val">2.0</td><td class="desc">Respiration temperature sensitivity per 10 °C</td></tr>
+        <tr><td class="sym">τ (tau)</td><td class="val">0.14</td><td class="desc">Root dry-mass fraction (hydroponic NFT)</td></tr>
+        <tr><td class="sym">K</td><td class="val">0.9</td><td class="desc">Canopy light-extinction coefficient</td></tr>
+        <tr><td class="sym">LAR</td><td class="val">0.075 m²/g</td><td class="desc">Structural leaf-area ratio</td></tr>
+        <tr><td class="sym">ω (omega)</td><td class="val">1.83×10⁻³ g/m³/ppm</td><td class="desc">CO₂ mass-density conversion factor</td></tr>
+        <tr><td class="sym">Γ₂₀ (c_Gamma)</td><td class="val">40.0 ppm</td><td class="desc">CO₂ compensation point @ 20 °C</td></tr>
+        <tr><td class="sym">Q10_Γ</td><td class="val">2.0</td><td class="desc">Compensation-point temperature sensitivity</td></tr>
+        <tr><td class="sym">ε₀ (c_epsilon)</td><td class="val">17×10⁻⁶ g CO₂/J</td><td class="desc">Quantum use efficiency</td></tr>
+        <tr><td class="sym">g_bnd</td><td class="val">0.007 m/s</td><td class="desc">Boundary-layer conductance</td></tr>
+        <tr><td class="sym">g_stm</td><td class="val">0.005 m/s</td><td class="desc">Stomatal conductance (baseline, unstressed)</td></tr>
+        <tr><td class="sym">Dry-matter fraction</td><td class="val">0.05</td><td class="desc">Lettuce fresh-weight dry-matter content</td></tr>
+        <tr><td class="sym">X_sdm(0)</td><td class="val">0.72 g/m²</td><td class="desc">Seedling structural dry mass at transplant</td></tr>
+        <tr><td class="sym">X_nsdm(0)</td><td class="val">0.25 g/m²</td><td class="desc">Seedling non-structural dry mass at transplant</td></tr>
+        <tr><td class="sym">PAR_UMOL_PER_W</td><td class="val">4.6</td><td class="desc">µmol·m⁻²·s⁻¹ PPFD → W/m² PAR conversion</td></tr>
+        <tr><td class="sym">Substeps/phase</td><td class="val">24</td><td class="desc">Euler integration resolution per light/dark phase</td></tr>
+      </table>
+
+      <div class="subgroup-label">pH availability windows (N, K, Mg only — per-lever coupling)</div>
+      <table class="const">
+        <tr><th>Nutrient</th><th>(lo_min, lo, hi, hi_max)</th><th>Meaning</th></tr>
+        <tr><td class="sym">N</td><td class="val">4.5, 5.0, 7.5, 8.0</td><td class="desc">Rubisco/carboxylation lever</td></tr>
+        <tr><td class="sym">K</td><td class="val">4.0, 4.5, 8.0, 8.5</td><td class="desc">Guard-cell turgor / stomatal lever</td></tr>
+        <tr><td class="sym">Mg</td><td class="val">5.0, 6.0, 8.0, 8.5</td><td class="desc">Chlorophyll / quantum-efficiency lever</td></tr>
+      </table>
+
+      <h3 class="section-h">Formulas</h3>
+      <ol class="formulas">
+        <li>
+          <div class="fname">CO₂ compensation point</div>
+          <div class="eq">$$ \Gamma(T) = \Gamma_{20}\cdot Q10_{\Gamma}^{\,(T-20)/10} $$</div>
+        </li>
+        <li>
+          <div class="fname">pH-gated nutrient availability (per lever)</div>
+          <div class="eq">$$
+            a(\text{pH}) = \begin{cases}
+            0 & \text{pH}\le lo_{min}\ \text{or}\ \text{pH}\ge hi_{max}\\[3pt]
+            \dfrac{\text{pH}-lo_{min}}{lo-lo_{min}} & lo_{min}&lt;\text{pH}&lt;lo\\[6pt]
+            1 & lo\le\text{pH}\le hi\\[4pt]
+            \dfrac{hi_{max}-\text{pH}}{hi_{max}-hi} & hi&lt;\text{pH}&lt;hi_{max}
+            \end{cases}
+          $$</div>
+        </li>
+        <li>
+          <div class="fname">Nutrient photosynthetic capacity</div>
+          <div class="eq">$$ \text{cap} = 1-\exp\!\Big(\!-\dfrac{\text{ppm}\cdot a(\text{pH})}{\text{opt}/2.3}\Big) $$</div>
+          <div class="fdesc">Computed independently for N (Rubisco), K (stomata), Mg (chlorophyll) — reaches ~90% at species optimum.</div>
+        </li>
+        <li>
+          <div class="fname">Combined stomatal-conductance multiplier</div>
+          <div class="eq">$$ g_{mult} = \text{cap}_K \cdot f_{water}\cdot f_{EC} $$</div>
+          <div class="fdesc">K, water stress and EC all gate the same guard-cell turgor mechanism, so they combine multiplicatively (Jarvis, 1976). <code>f_EC</code> reuses the Model A EC-factor formula.</div>
+        </li>
+        <li>
+          <div class="fname">Quantum (light-use) efficiency</div>
+          <div class="eq">$$ \varepsilon = \varepsilon_0\cdot\text{cap}_{Mg}\cdot\dfrac{CO_2-\Gamma}{CO_2+2\Gamma} $$</div>
+        </li>
+        <li>
+          <div class="fname">Irradiance &amp; light-limited term</div>
+          <div class="eq">$$ I=\dfrac{\text{PPFD}}{4.6},\qquad L_{term}=\varepsilon\cdot I $$</div>
+        </li>
+        <li>
+          <div class="fname">Carboxylation conductance</div>
+          <div class="eq">$$ g_{car}(T)=\max\!\big(10^{-6},\ -1.32\!\times\!10^{-5}T^2+5.94\!\times\!10^{-4}T-2.64\!\times\!10^{-3}\big) $$</div>
+        </li>
+        <li>
+          <div class="fname">Effective stomatal &amp; canopy CO₂ conductance</div>
+          <div class="eq">$$
+            g_{stm,eff}=\max(10^{-6},\ g_{stm}\cdot g_{mult}),\qquad
+            g_{CO_2}=\dfrac{1}{\tfrac{1}{g_{bnd}}+\tfrac{1}{g_{stm,eff}}+\tfrac{1}{g_{car}}}
+          $$</div>
+          <div class="fdesc">Boundary-layer, stomatal and carboxylation resistances in series.</div>
+        </li>
+        <li>
+          <div class="fname">CO₂-limited term</div>
+          <div class="eq">$$ C_{term} = g_{CO_2}\cdot\omega\cdot(CO_2-\Gamma)\cdot\text{cap}_N $$</div>
+        </li>
+        <li>
+          <div class="fname">Farquhar-style co-limitation</div>
+          <div class="eq">$$ f_{phot,max}^{raw} = \dfrac{L_{term}\cdot C_{term}}{L_{term}+C_{term}} $$</div>
+        </li>
+        <li>
+          <div class="fname">Photoinhibition penalty</div>
+          <div class="eq">$$ f_{phot,max} = f_{phot,max}^{raw}\cdot f_{PI}(\text{PPFD}) $$</div>
+          <div class="fdesc">The 1994 model has no photoinhibition term of its own — this reuses Model A's <code>f_PI</code> so both paths agree at high PPFD instead of Van Henten extrapolating unbounded growth past the plant's real tolerance.</div>
+        </li>
+        <li>
+          <div class="fname">Canopy light interception</div>
+          <div class="eq">$$ CC = 1-\exp\!\big(-K\cdot LAR\cdot(1-\tau)\cdot X_{sdm}\big) $$</div>
+        </li>
+        <li>
+          <div class="fname">Gross canopy photosynthesis</div>
+          <div class="eq">$$ f_{phot} = CC\cdot f_{phot,max} $$</div>
+        </li>
+        <li>
+          <div class="fname">Maintenance respiration</div>
+          <div class="eq">$$
+            q10_{resp}=Q10_{resp}^{(T-25)/10},\qquad
+            f_{resp}=\big(c_{sht}(1\!-\!\tau)X_{sdm}+c_{rt}\,\tau X_{sdm}\big)\cdot q10_{resp}
+          $$</div>
+        </li>
+        <li>
+          <div class="fname">Specific growth rate</div>
+          <div class="eq">$$ r_{gr} = c_{gr,max}\cdot\dfrac{X_{nsdm}}{\gamma X_{sdm}+X_{nsdm}}\cdot Q10_{gr}^{(T-20)/10} $$</div>
+          <div class="fdesc">Structural growth throttled by how full the non-structural sugar buffer currently is.</div>
+        </li>
+        <li>
+          <div class="fname">Structural dry-matter ODE</div>
+          <div class="eq">$$ \dfrac{dX_{sdm}}{dt} = r_{gr}\cdot X_{sdm} $$</div>
+        </li>
+        <li>
+          <div class="fname">Growth (synthesis) respiration</div>
+          <div class="eq">$$ R_{growth} = \dfrac{1-\beta}{\beta}\cdot r_{gr}\cdot X_{sdm} $$</div>
+        </li>
+        <li>
+          <div class="fname">Non-structural buffer ODE</div>
+          <div class="eq">$$ \dfrac{dX_{nsdm}}{dt} = \alpha\cdot f_{phot} - r_{gr}X_{sdm} - f_{resp} - R_{growth} $$</div>
+          <div class="fdesc">At night (PPFD = 0), <code>f_phot = 0</code> — the buffer drains while structural growth keeps drawing on it.</div>
+        </li>
+        <li>
+          <div class="fname">Numerical integration</div>
+          <div class="eq">$$ X(t+\Delta t) = \max(0,\ X(t) + \tfrac{dX}{dt}\Delta t) $$</div>
+          <div class="fdesc">Explicit Euler, 24 substeps across each day's lit phase (light hours) and dark phase (24 − light hours) separately — not a flat 24 h of light.</div>
+        </li>
+        <li>
+          <div class="fname">Biomass partition &amp; yield conversion</div>
+          <div class="eq">$$
+            \text{leaf}=(1\!-\!\tau)(X_{sdm}\!+\!X_{nsdm}),\quad
+            \text{root}=\tau(X_{sdm}\!+\!X_{nsdm})
+          $$</div>
+          <div class="eq">$$
+            \text{total}_{plant}=\dfrac{X_{sdm}+X_{nsdm}}{\text{density}},\qquad
+            \text{fresh}_{plant}=\dfrac{\text{total}_{plant}}{0.05}
+          $$</div>
+          <div class="fdesc">Harvest day = first day <code>fresh_plant ≥ harvestTargetG</code>.</div>
+        </li>
+      </ol>
+    </section>
+
+    <div class="shared-note">
+      <b>Shared machinery.</b> Both models run for every lettuce simulation and are reported
+      side by side. They share three building blocks by design rather than duplicating them:
+      the <b>EC/osmotic-ceiling formula</b> (§EC factor), the <b>photoinhibition formula</b>
+      (§Photoinhibition factor), and the lettuce <b>species constants</b> table
+      (temperatures, pH, nutrient optima, EC multipliers). Nitrogen, potassium and magnesium
+      each drive a distinct physiological lever inside Van Henten (Rubisco / stomata /
+      chlorophyll respectively); phosphorus and calcium have no equivalent single-parameter
+      hook in the 1994 model's two-term co-limitation and therefore only affect the
+      Traditional model.
+    </div>
+
+  </div>
+</main>
+
+<footer class="page">
+  References — Van Henten, E.J. (1994) "Validation of a dynamic lettuce growth model for greenhouse climate control", <i>Agricultural Systems</i> 45(1), 55–72.
+  · Van Ooteghem (2007), "Optimal Control Design for a Solar Greenhouse", Wageningen PhD thesis.
+  · Evans, J.R. (1989), "Photosynthesis and nitrogen relationships in leaves of C3 plants", <i>Oecologia</i> 78(1), 9–19.
+  · Jarvis, P.G. (1976), <i>Phil. Trans. R. Soc. B</i> 273(927), 593–610.
+  · Humble &amp; Raschke (1971), stomatal guard-cell turgor physiology.
+  · Liebig, J. von (1840s), Law of the Minimum.
+</footer>
+
+<script>
+  window.addEventListener('load', function () {
+    if (window.renderMathInElement) {
+      renderMathInElement(document.body, {
+        delimiters: [
+          {left: '$$', right: '$$', display: true},
+          {left: '\\(', right: '\\)', display: false}
+        ],
+        throwOnError: false
+      });
+    }
+  });
+</script>
+
+</body>
+</html>

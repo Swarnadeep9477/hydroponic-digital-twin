@@ -1208,7 +1208,7 @@
   // LETTUCE GROWTH ENGINE — calls the Python backend (backend/app.py) for
   // a real prediction, then plays back the returned day-by-day trajectory
   // ============================================================
-  const GROWTH_ENGINE_URL = 'http://localhost:8000/simulate';
+  const GROWTH_ENGINE_URL = '/simulate';
   const SEEDLING_SCALE = 0.09, FULL_SCALE = 0.85; // hole spacing (1.05 units) comfortably clears this with room to spare
   const PLAYBACK_SECONDS_PER_DAY = 2.5; // how fast the predicted trajectory plays out visually
   const STRESS_TINT_OUTER = 0.7, STRESS_TINT_INNER = 0.35, STRESS_TINT_CORE = 0.25;
@@ -1530,7 +1530,7 @@
       runSimBtn.textContent = '▶ Run Simulation';
       simStatusEl.textContent = 'Could not reach the growth engine — start the backend (see backend/README.md)';
       simStatusEl.classList.add('error');
-      showToast('Could not reach the growth engine at localhost:8000', true);
+      showToast('Could not reach the growth engine backend', true);
     }
   });
 

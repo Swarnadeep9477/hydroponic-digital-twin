@@ -8,13 +8,18 @@ the plant through, and what the harvest report is built from.
 
 Run with: uvicorn app:app --reload --port 8000
 """
+from pathlib import Path
 from typing import Literal
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 import simulator
+
+FRONTEND_DIR = Path(__file__).resolve().parent.parent
 
 app = FastAPI(title="Hydroponic Growth Engine")
 
@@ -73,3 +78,20 @@ def species():
 @app.get("/health")
 def health():
     return {"status": "ok", "species": list(simulator.SPECIES.keys())}
+
+
+# serves the frontend so the whole app is reachable through one port (and
+# one tunnel) instead of needing a separate static file server - only the
+# css/js asset dirs and the two HTML pages are exposed, not the whole repo
+app.mount("/css", StaticFiles(directory=FRONTEND_DIR / "css"), name="css")
+app.mount("/js", StaticFiles(directory=FRONTEND_DIR / "js"), name="js")
+
+
+@app.get("/")
+def index():
+    return FileResponse(FRONTEND_DIR / "index.html")
+
+
+@app.get("/formulas.html")
+def formulas():
+    return FileResponse(FRONTEND_DIR / "formulas.html")
