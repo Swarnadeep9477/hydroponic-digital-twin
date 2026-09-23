@@ -446,6 +446,11 @@ def simulate_lettuce_van_henten(temp: float, ppfd: float, co2_ppm: float,
     water_f = 1.0 if water_available else 0.0
     ec_f = ec_factor(compute_ec(nutrients), sp)
     g_stm_mult = cap_k * water_f * ec_f
+    # Van Henten has no bounded 0-1 "temperature quality" score of its own
+    # (temperature acts continuously through the Q10 terms inside the ODE
+    # instead) - reuse the traditional model's floor/plateau/ceiling curve
+    # here purely for grading purposes, same as the other per-lever factors.
+    temp_quality_f = temperature_factor(temp, sp)
 
     xsdm, xnsdm = c["xsdm0"], c["xnsdm0"]
     trajectory = []
@@ -484,9 +489,29 @@ def simulate_lettuce_van_henten(temp: float, ppfd: float, co2_ppm: float,
                 xnsdm = max(0.0, xnsdm + d_xnsdm * dt)
 
     final = trajectory[-1]
+    will_reach_harvest = days_to_harvest is not None
+
+    # Grade mirrors the traditional model's A-F scheme, built from the same
+    # kind of "worst independent lever" stress index - stomatalConductance-
+    # Multiplier is excluded here since it's just cap_k*water_f*ec_f, already
+    # covered by its own factors, so including it too would triple-count them.
+    stress = 1 - min(cap_n, cap_k, cap_mg, water_f, ec_f, temp_quality_f)
+    if not will_reach_harvest:
+        grade = "F"
+    elif stress < 0.1:
+        grade = "A"
+    elif stress < 0.3:
+        grade = "B"
+    elif stress < 0.6:
+        grade = "C"
+    else:
+        grade = "D"
+
     return {
-        "willReachHarvest": days_to_harvest is not None,
+        "willReachHarvest": will_reach_harvest,
         "daysToHarvest": days_to_harvest,
+        "grade": grade,
+        "stress": round(stress, 4),
         "finalSdmGm2": final["sdmGm2"], "finalNsdmGm2": final["nsdmGm2"],
         "finalTotalBiomassGm2": final["totalBiomassGm2"],
         "finalLeafBiomassG": final["leafBiomassG"],
@@ -507,6 +532,7 @@ def simulate_lettuce_van_henten(temp: float, ppfd: float, co2_ppm: float,
             "magnesiumCapacity": round(cap_mg, 4),
             "waterFactor": round(water_f, 4),
             "ecFactor": round(ec_f, 4),
+            "temperatureFactor": round(temp_quality_f, 4),
             "stomatalConductanceMultiplier": round(g_stm_mult, 4),
         },
     }

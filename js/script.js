@@ -1252,6 +1252,7 @@
           : '<span class="fail">✕ Won\'t hit target fresh weight in the simulated window</span>';
 
         const tiles = [
+          ['Grade', vh.grade, ''],
           ['Fresh weight', vh.finalFreshWeightG, 'g/plant'],
           ['Total dry', vh.finalTotalBiomassG, 'g/plant'],
           ['Leaf', vh.finalLeafBiomassG, 'g/plant'],
@@ -1272,6 +1273,7 @@
           ['Magnesium', sf.magnesiumCapacity],
           ['Water', sf.waterFactor],
           ['EC / salinity', sf.ecFactor],
+          ['Temperature', sf.temperatureFactor],
           ['Stomatal conductance', sf.stomatalConductanceMultiplier],
         ];
         const stressRowsHtml = stressRows.map(([label,raw])=>{
